@@ -1482,6 +1482,7 @@ ClassMethod IsInvocationAllowed(className As %String, methodName As %String, Out
 ClassMethod InvokeClassMethod(className As %String, methodName As %String, args As %DynamicArray, Output sc As %Status) As %String [ Private ]
 {
     set sc = $$$OK
+    set ret = ""
     try {
         set maxArgs = +$get(^AIAgent.Config("GenericOperate","Invoke","MaxArguments"), 4)
         if '$isobject(args) {
@@ -1491,24 +1492,23 @@ ClassMethod InvokeClassMethod(className As %String, methodName As %String, args 
         }
         if argCount>maxArgs {
             set sc = $$$ERROR($$$GeneralError, "Too many arguments. Max="_maxArgs)
-            quit ""
-        }
-
-        if argCount=0 {
-            quit $classmethod(className, methodName)
-        } elseif argCount=1 {
-            quit $classmethod(className, methodName, args.%Get(0))
-        } elseif argCount=2 {
-            quit $classmethod(className, methodName, args.%Get(0), args.%Get(1))
-        } elseif argCount=3 {
-            quit $classmethod(className, methodName, args.%Get(0), args.%Get(1), args.%Get(2))
-        } elseif argCount=4 {
-            quit $classmethod(className, methodName, args.%Get(0), args.%Get(1), args.%Get(2), args.%Get(3))
+        } else {
+            if argCount=0 {
+                set ret = $classmethod(className, methodName)
+            } elseif argCount=1 {
+                set ret = $classmethod(className, methodName, args.%Get(0))
+            } elseif argCount=2 {
+                set ret = $classmethod(className, methodName, args.%Get(0), args.%Get(1))
+            } elseif argCount=3 {
+                set ret = $classmethod(className, methodName, args.%Get(0), args.%Get(1), args.%Get(2))
+            } elseif argCount=4 {
+                set ret = $classmethod(className, methodName, args.%Get(0), args.%Get(1), args.%Get(2), args.%Get(3))
+            }
         }
     } catch ex {
         set sc = ex.AsStatus()
     }
-    quit ""
+    quit ret
 }
 
 ClassMethod LikePattern(value As %String, pattern As %String) As %Boolean [ Private ]
