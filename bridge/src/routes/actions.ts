@@ -19,6 +19,8 @@ type ActionType =
 interface ApprovedAction {
   id?: string;
   type: ActionType | string;
+  op?: 'discover' | 'query' | 'mutate' | 'execute' | 'govern';
+  target?: string;
   requiresApproval?: boolean;
   endpoint?: string;
   method?: 'GET' | 'POST';
@@ -125,16 +127,30 @@ export function createActionsRouter(): Router {
             throw new Error('integration_change_plan is a planning artifact and cannot be executed directly.');
           }
 
-          const endpointInfo = resolveActionEndpoint(action);
           const payload = action.payload || {};
-          const endpoint = applyPathParams(endpointInfo.endpoint, payload);
-          const body = { ...payload };
-          // Remove path params from body once inlined.
-          for (const token of (endpointInfo.endpoint.match(/:[A-Za-z0-9_]+/g) || [])) {
-            delete body[token.substring(1)];
+          if (action.op && action.target) {
+            data = await irisClient.operate({
+              op: action.op,
+              target: action.target,
+              action: asString(payload.action) || 'apply',
+              args: payload.args && typeof payload.args === 'object' ? (payload.args as Record<string, unknown>) : payload,
+              namespace: asString(payload.namespace) || undefined,
+              correlationId: asString(payload.correlationId) || undefined,
+              requestId: asString(payload.requestId) || undefined,
+              dryRun: false,
+            });
+            message = `${action.op}:${action.target} executed via /ai/operate`;
+          } else {
+            const endpointInfo = resolveActionEndpoint(action);
+            const endpoint = applyPathParams(endpointInfo.endpoint, payload);
+            const body = { ...payload };
+            // Remove path params from body once inlined.
+            for (const token of (endpointInfo.endpoint.match(/:[A-Za-z0-9_]+/g) || [])) {
+              delete body[token.substring(1)];
+            }
+            data = await irisClient.request(endpointInfo.method, endpoint, body);
+            message = `${action.type} executed via ${endpointInfo.method} ${endpoint}`;
           }
-          data = await irisClient.request(endpointInfo.method, endpoint, body);
-          message = `${action.type} executed via ${endpointInfo.method} ${endpoint}`;
 
           results.push({
             id,

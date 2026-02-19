@@ -212,31 +212,35 @@ export class Orchestrator {
           action.status = 'pending-approval';
           continue;
         }
-        if (action.method === 'GET' && action.endpoint) {
+        const canDirectRead = action.op === 'query' || action.op === 'discover' || action.method === 'GET';
+        if (canDirectRead && (action.target || action.endpoint)) {
           try {
             let data: unknown;
-            if (config.genericOperate.enabled && action.op === 'query' && action.target) {
+            if (config.genericOperate.enabled && action.target && (action.op === 'query' || action.op === 'discover')) {
               const opResult = await this.irisClient.operate({
                 namespace: input.namespace,
-                op: 'query',
+                op: action.op,
                 target: action.target,
                 action: 'read',
                 args: action.payload || {},
                 dryRun: false,
               });
               data = this.unwrapData(opResult);
-            } else {
+            } else if (action.endpoint) {
               data = this.unwrapData(await this.irisClient.request('GET', action.endpoint));
+            } else {
+              throw new Error('No target or endpoint available for direct read action.');
             }
             action.status = 'executed';
             executedCount++;
-            const summary = this.summarizeReadResult(action.type, data);
+            const summary = this.summarizeReadResult(action.type, action.target, data);
             if (summary) executedNotes.push(summary);
-            const block = this.buildReadResponseBlock(action.type, data, input.message);
+            const block = this.buildReadResponseBlock(action.type, action.target, data, input.message);
             if (block) executedBlocks.push(block);
           } catch (err) {
             action.status = 'pending-approval';
-            executedNotes.push(`Read action failed (${action.type}): ${err instanceof Error ? err.message : String(err)}`);
+            const label = action.target || action.type;
+            executedNotes.push(`Read action failed (${label}): ${err instanceof Error ? err.message : String(err)}`);
           }
         }
       }
@@ -638,10 +642,10 @@ export class Orchestrator {
       '{"mode":"respond|actions","response":"string","actions":[{"id":"string","type":"string","op":"discover|query|mutate|execute|govern","target":"string","summary":"string","requiresApproval":true|false,"endpoint":"/path","method":"GET|POST","payload":{}}]}',
       'Rules:',
       '- Use actions only when the user asks for real environment operations.',
-      '- For read-only queries, propose GET actions with requiresApproval=false and return the requested data directly.',
+      '- For read-only queries, prefer actions with op=query or op=discover and a concrete target.',
       '- For mutating/deployment actions, requiresApproval=true.',
       '- Do NOT ask for extra confirmation for read-only actions; execute via action broker immediately.',
-      '- Only use endpoints from the provided action catalog.',
+      '- Prefer generic op+target actions. Endpoint/method are optional compatibility fields.',
       `Intent: ${intent}`,
       `Namespace: ${input.namespace}`,
       capabilities ? `Capabilities: ${capabilities}` : '',
@@ -687,31 +691,41 @@ export class Orchestrator {
 
   private normalizePlannedActions(actions: ActionProposal[]): ActionProposal[] {
     const normalized: ActionProposal[] = [];
+    const validOps = new Set(['discover', 'query', 'mutate', 'execute', 'govern']);
     for (const a of actions) {
       const endpoint = a.endpoint || '';
       const method = (a.method || 'GET') as 'GET' | 'POST';
       const entry = ACTION_CATALOG.find(e =>
         (a.type && e.type === a.type) || (endpoint && e.endpoint === endpoint && e.method === method)
       );
-      if (!entry) continue;
+      const op = a.op || entry?.op;
+      const target = a.target || entry?.target;
+      const hasGenericShape = !!(op && validOps.has(op) && target && target.trim().length > 0);
+      if (!entry && !hasGenericShape) continue;
+
+      const requiresApproval = hasGenericShape
+        ? (op === 'mutate' || op === 'execute' || op === 'govern')
+        : !!entry?.requiresApproval;
+
       normalized.push({
         id: a.id || this.actionId(),
-        type: entry.type,
-        op: a.op || entry.op,
-        target: a.target || entry.target,
-        summary: a.summary || entry.description,
-        requiresApproval: entry.requiresApproval,
-        status: entry.requiresApproval ? 'pending-approval' : 'executed',
-        endpoint: entry.endpoint,
-        method: entry.method,
+        type: a.type || entry?.type || `${op}:${target}`,
+        op,
+        target,
+        summary: a.summary || entry?.description || `${op}:${target}`,
+        requiresApproval,
+        status: requiresApproval ? 'pending-approval' : 'executed',
+        endpoint: a.endpoint || entry?.endpoint,
+        method: a.method || entry?.method,
         payload: a.payload || {},
       });
     }
     return normalized;
   }
 
-  private summarizeReadResult(type: string, data: unknown): string {
-    switch (type) {
+  private summarizeReadResult(type: string, target: string | undefined, data: unknown): string {
+    const resolvedType = this.resolveReadType(type, target);
+    switch (resolvedType) {
       case 'production_status': {
         const d = (data || {}) as Record<string, unknown>;
         return `Production status: ${String(d.statusText || d.status || 'unknown')} (${String(d.productionName || 'unknown')})`;
@@ -733,13 +747,14 @@ export class Orchestrator {
         return `Lookup table list read: ${rows.length} table(s).`;
       }
       default:
-        return `${type} executed.`;
+        return `${target || type} executed.`;
     }
   }
 
-  private buildReadResponseBlock(type: string, data: unknown, userMessage: string): string {
+  private buildReadResponseBlock(type: string, target: string | undefined, data: unknown, userMessage: string): string {
+    const resolvedType = this.resolveReadType(type, target);
     const lower = (userMessage || '').toLowerCase();
-    if (type === 'production_topology') {
+    if (resolvedType === 'production_topology') {
       const hosts = this.extractHosts(data);
       if (hosts.length === 0) return 'No production hosts were returned.';
       const namesOnly = /\b(names?|host names?|just.*names?)\b/.test(lower);
@@ -755,7 +770,7 @@ export class Orchestrator {
       }
       return lines.join('\n');
     }
-    if (type === 'production_status') {
+    if (resolvedType === 'production_status') {
       const d = (data || {}) as Record<string, unknown>;
       return [
         'Production status:',
@@ -764,14 +779,14 @@ export class Orchestrator {
         `- Namespace: ${String(d.namespace || 'Unknown')}`,
       ].join('\n');
     }
-    if (type === 'queue_counts') {
+    if (resolvedType === 'queue_counts') {
       const rows = this.extractQueueRows(data);
       if (rows.length === 0) return 'No queue rows were returned.';
       const lines: string[] = [`Queue counts (${rows.length} host(s)):`];
       for (const r of rows) lines.push(`- ${r.name}: ${r.count}`);
       return lines.join('\n');
     }
-    if (type === 'event_log') {
+    if (resolvedType === 'event_log') {
       const rows = this.extractEvents(data);
       if (rows.length === 0) return 'No recent event rows were returned.';
       const lines: string[] = [`Recent events (${rows.length}):`];
@@ -780,14 +795,14 @@ export class Orchestrator {
       }
       return lines.join('\n');
     }
-    if (type === 'lookup_tables') {
+    if (resolvedType === 'lookup_tables') {
       const rows = this.extractLookupTables(data);
       if (rows.length === 0) return 'No lookup tables were returned.';
       const lines: string[] = [`Lookup tables (${rows.length}):`];
       for (const t of rows) lines.push(`- ${t}`);
       return lines.join('\n');
     }
-    if (type === 'lookup_read') {
+    if (resolvedType === 'lookup_read') {
       const d = (data || {}) as Record<string, unknown>;
       const tableName = String(d.tableName || 'Unknown');
       const entries = this.extractArray(d.entries, ['items']);
@@ -800,6 +815,18 @@ export class Orchestrator {
       return lines.join('\n');
     }
     return '';
+  }
+
+  private resolveReadType(type: string, target?: string): string {
+    const t = (target || '').toLowerCase();
+    if (t === 'production/status') return 'production_status';
+    if (t === 'production/topology') return 'production_topology';
+    if (t === 'production/queues') return 'queue_counts';
+    if (t === 'production/events') return 'event_log';
+    if (t === 'lookups') return 'lookup_tables';
+    if (t.startsWith('lookup/')) return 'lookup_read';
+    if (type && type !== 'unknown') return type;
+    return type || 'unknown';
   }
 
   private cleanMechanicalPrompting(text: string): string {
