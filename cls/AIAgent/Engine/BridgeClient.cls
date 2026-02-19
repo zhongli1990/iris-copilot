@@ -94,13 +94,40 @@ ClassMethod SendMessageStream(conversationId As %String, message As %String, Out
                 // Always proxy raw SSE data line to the caller first.
                 // This keeps UI streaming working even if local JSON parse fails.
                 write line, !!, *-3
-                set jsonStr = $extract(line, 7, *)
+                set jsonStr = $zstrip($extract(line, 7, *), "<W")
                 try {
                     set chunk = ##class(%DynamicObject).%FromJSON(jsonStr)
-                    if chunk.token '= "" {
-                        set fullResponse = fullResponse _ chunk.token
+                    // IRIS 2022.1-safe extraction: rely on %Get default behavior,
+                    // avoid %IsDefined checks that can be version-sensitive.
+                    set tok = chunk.%Get("token")
+                    if tok '= "" {
+                        set fullResponse = fullResponse _ tok
                     }
-                } catch {}
+                    set rsp = chunk.%Get("response")
+                    if (rsp '= "") && (fullResponse = "") {
+                        set fullResponse = rsp
+                    }
+                    set fr = chunk.%Get("finalResponse")
+                    if fr '= "" {
+                        // Authoritative fallback emitted by bridge route:
+                        // use this value to guarantee persistence when token
+                        // parsing is lossy in older IRIS JSON handling.
+                        set fullResponse = fr
+                    }
+                } catch {
+                    // Fallback: when JSON parse fails, attempt to recover token text.
+                    set tokenRaw = $piece($piece(jsonStr, """token"":""", 2), """,""done""", 1)
+                    if tokenRaw '= "" {
+                        set wrapper = "{""t"":"""_tokenRaw_"""}"
+                        try {
+                            set decoded = ##class(%DynamicObject).%FromJSON(wrapper)
+                            set tok2 = decoded.%Get("t")
+                            if tok2 '= "" {
+                                set fullResponse = fullResponse _ tok2
+                            }
+                        } catch {}
+                    }
+                }
             }
         }
     } catch ex {

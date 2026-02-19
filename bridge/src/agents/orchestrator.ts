@@ -7,8 +7,9 @@
  */
 
 import type { RunnerRegistry } from '../runners/runner-registry.js';
-import type { RunnerChatRequest, RunnerStreamChunk, GeneratedCode } from '../runners/runner-interface.js';
+import type { AIRunnerAdapter, RunnerChatRequest, RunnerStreamChunk } from '../runners/runner-interface.js';
 import { config } from '../config.js';
+import { IRISClient } from '../iris/iris-client.js';
 
 export interface ChatInput {
   conversationId: string;
@@ -23,10 +24,40 @@ export interface ChatOutput {
   response: string;
   agent: string;
   runner: string;
+  actions?: ActionProposal[];
+  actionExecution?: {
+    mode: 'direct-read' | 'approval-required';
+    executedCount: number;
+  };
   generation?: {
     description: string;
     classes: Array<{ className: string; classType: string; source: string }>;
   };
+}
+
+export interface ActionProposal {
+  id: string;
+  type: string;
+  summary: string;
+  requiresApproval: boolean;
+  status: 'executed' | 'pending-approval';
+  endpoint?: string;
+  method?: 'GET' | 'POST';
+  payload?: Record<string, unknown>;
+}
+
+interface ActionCatalogEntry {
+  type: string;
+  endpoint: string;
+  method: 'GET' | 'POST';
+  requiresApproval: boolean;
+  description: string;
+}
+
+interface PlannerDecision {
+  mode: 'respond' | 'actions';
+  response: string;
+  actions?: ActionProposal[];
 }
 
 /**
@@ -44,9 +75,11 @@ type Intent =
 
 export class Orchestrator {
   private registry: RunnerRegistry;
+  private irisClient: IRISClient;
 
   constructor(registry: RunnerRegistry) {
     this.registry = registry;
+    this.irisClient = new IRISClient(this.getIrisApiBaseUrl());
   }
 
   /**
@@ -68,6 +101,18 @@ export class Orchestrator {
 
     // Classify intent to enrich the system prompt
     const intent = this.classifyIntent(input.message);
+
+    // Model-first action planning: use Claude/Codex to decide actions or plain response.
+    const planned = await this.tryModelPlannedActions(input, intent, runner);
+    if (planned) {
+      return planned;
+    }
+
+    // Fallback deterministic action handling (legacy safety net).
+    const actionResult = await this.tryHandleActionableRequest(input);
+    if (actionResult) {
+      return actionResult;
+    }
 
     // Build the request with IRIS context
     const request: RunnerChatRequest = {
@@ -113,6 +158,21 @@ export class Orchestrator {
     }
 
     const intent = this.classifyIntent(input.message);
+    const planned = await this.tryModelPlannedActions(input, intent, runner);
+    if (planned) {
+      yield { token: '', done: false, runner: planned.runner };
+      yield { token: planned.response, done: false };
+      yield { token: '', done: true };
+      return;
+    }
+
+    const actionResult = await this.tryHandleActionableRequest(input);
+    if (actionResult) {
+      yield { token: '', done: false, runner: actionResult.runner };
+      yield { token: actionResult.response, done: false };
+      yield { token: '', done: true };
+      return;
+    }
     // Emit runner attribution first so UI can show exactly which runner is active.
     yield { token: '', done: false, runner: runner.id };
     const request: RunnerChatRequest = {
@@ -122,6 +182,591 @@ export class Orchestrator {
     };
 
     yield* runner.chatStream(request);
+  }
+
+  private async tryModelPlannedActions(input: ChatInput, intent: Intent, runner: AIRunnerAdapter): Promise<ChatOutput | null> {
+    try {
+      const plannerRequest: RunnerChatRequest = {
+        message: this.buildPlannerUserPrompt(input),
+        history: [],
+        systemPrompt: this.buildPlannerSystemPrompt(intent, input),
+      };
+      const raw = await runner.chat(plannerRequest);
+      const parsed = this.parsePlannerDecision(raw.content);
+      if (!parsed || parsed.mode !== 'actions' || !parsed.actions || parsed.actions.length === 0) {
+        return null;
+      }
+
+      const normalized = this.normalizePlannedActions(parsed.actions);
+      if (normalized.length === 0) return null;
+
+      let executedCount = 0;
+      const executedNotes: string[] = [];
+      const executedBlocks: string[] = [];
+      for (const action of normalized) {
+        if (action.requiresApproval) {
+          action.status = 'pending-approval';
+          continue;
+        }
+        if (action.method === 'GET' && action.endpoint) {
+          try {
+            const data = this.unwrapData(await this.irisClient.request('GET', action.endpoint));
+            action.status = 'executed';
+            executedCount++;
+            const summary = this.summarizeReadResult(action.type, data);
+            if (summary) executedNotes.push(summary);
+            const block = this.buildReadResponseBlock(action.type, data, input.message);
+            if (block) executedBlocks.push(block);
+          } catch (err) {
+            action.status = 'pending-approval';
+            executedNotes.push(`Read action failed (${action.type}): ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      }
+
+      const responseLines: string[] = [];
+      if (parsed.response?.trim()) {
+        responseLines.push(parsed.response.trim());
+      } else {
+        responseLines.push('Action plan generated from your request.');
+      }
+      if (executedBlocks.length > 0) {
+        responseLines.push('');
+        responseLines.push(...executedBlocks);
+      }
+      if (executedNotes.length > 0) {
+        responseLines.push('');
+        responseLines.push('Execution results:');
+        responseLines.push(...executedNotes.map(s => `- ${s}`));
+      }
+      if (normalized.some(a => a.requiresApproval)) {
+        responseLines.push('');
+        responseLines.push('Pending approval actions are ready for `/api/actions/approve`.');
+      }
+
+      return {
+        response: this.cleanMechanicalPrompting(responseLines.join('\n')),
+        agent: 'orchestrator/model-action-broker',
+        runner: runner.id,
+        actions: normalized,
+        actionExecution: {
+          mode: normalized.some(a => a.requiresApproval) ? 'approval-required' : 'direct-read',
+          executedCount,
+        },
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private getIrisApiBaseUrl(): string {
+    const base = config.iris.baseUrl.replace(/\/$/, '');
+    if (base.endsWith('/ai')) return base;
+    return `${base}/ai`;
+  }
+
+  private async tryHandleActionableRequest(input: ChatInput): Promise<ChatOutput | null> {
+    const action = this.detectAction(input.message);
+    if (!action) return null;
+
+    try {
+      if (action === 'production_topology') {
+        const raw = await this.irisClient.getProductionTopology();
+        const data = this.unwrapData(raw);
+        const hosts = this.extractHosts(data);
+        const lines: string[] = [];
+        lines.push(`Current production has ${hosts.length} configured host(s).`);
+        for (const h of hosts.slice(0, 150)) {
+          lines.push(`- ${h.name} | ${h.className} | ${h.category} | ${h.enabled ? 'Enabled' : 'Disabled'}`);
+        }
+        if (hosts.length > 150) {
+          lines.push(`... ${hosts.length - 150} more host(s) not shown.`);
+        }
+        return {
+          response: lines.join('\n'),
+          agent: 'orchestrator/action-broker',
+          runner: 'orchestrator-action-broker',
+          actions: [{
+            id: this.actionId(),
+            type: 'production_topology',
+            summary: 'Listed current production items from live IRIS topology endpoint.',
+            requiresApproval: false,
+            status: 'executed',
+            endpoint: '/production/topology',
+            method: 'GET',
+          }],
+          actionExecution: { mode: 'direct-read', executedCount: 1 },
+        };
+      }
+
+      if (action === 'production_status') {
+        const raw = await this.irisClient.getProductionStatus();
+        const data = this.unwrapData(raw) as Record<string, unknown>;
+        const summary = [
+          `Production: ${String(data.productionName || 'Unknown')}`,
+          `Status: ${String(data.statusText || data.status || 'Unknown')}`,
+          `Namespace: ${String(data.namespace || input.namespace || 'Unknown')}`,
+        ].join('\n');
+        return {
+          response: summary,
+          agent: 'orchestrator/action-broker',
+          runner: 'orchestrator-action-broker',
+          actions: [{
+            id: this.actionId(),
+            type: 'production_status',
+            summary: 'Fetched live production status from IRIS.',
+            requiresApproval: false,
+            status: 'executed',
+            endpoint: '/production/status',
+            method: 'GET',
+          }],
+          actionExecution: { mode: 'direct-read', executedCount: 1 },
+        };
+      }
+
+      if (action === 'queue_counts') {
+        const raw = await this.irisClient.getQueueCounts();
+        const data = this.unwrapData(raw);
+        const rows = this.extractQueueRows(data);
+        const lines: string[] = [`Current queue counts (${rows.length} host(s)):`];
+        for (const r of rows.slice(0, 150)) {
+          lines.push(`- ${r.name}: ${r.count}`);
+        }
+        if (rows.length > 150) {
+          lines.push(`... ${rows.length - 150} more host(s) not shown.`);
+        }
+        return {
+          response: lines.join('\n'),
+          agent: 'orchestrator/action-broker',
+          runner: 'orchestrator-action-broker',
+          actions: [{
+            id: this.actionId(),
+            type: 'queue_counts',
+            summary: 'Fetched live queue depths from IRIS.',
+            requiresApproval: false,
+            status: 'executed',
+            endpoint: '/production/queues',
+            method: 'GET',
+          }],
+          actionExecution: { mode: 'direct-read', executedCount: 1 },
+        };
+      }
+
+      if (action === 'event_log') {
+        const raw = await this.irisClient.getEventLog(30);
+        const data = this.unwrapData(raw);
+        const events = this.extractEvents(data);
+        const lines: string[] = [`Recent production events (${events.length} row(s)):`];
+        for (const ev of events.slice(0, 30)) {
+          lines.push(`- ${ev.when} | ${ev.level} | ${ev.source} | ${ev.message}`);
+        }
+        return {
+          response: lines.join('\n'),
+          agent: 'orchestrator/action-broker',
+          runner: 'orchestrator-action-broker',
+          actions: [{
+            id: this.actionId(),
+            type: 'event_log',
+            summary: 'Fetched recent production events from IRIS.',
+            requiresApproval: false,
+            status: 'executed',
+            endpoint: '/production/events',
+            method: 'GET',
+          }],
+          actionExecution: { mode: 'direct-read', executedCount: 1 },
+        };
+      }
+
+      if (action === 'lookup_tables') {
+        const raw = await this.irisClient.listLookupTables();
+        const data = this.unwrapData(raw);
+        const tables = this.extractLookupTables(data);
+        const lines: string[] = [`Lookup tables (${tables.length}):`];
+        for (const t of tables.slice(0, 100)) {
+          lines.push(`- ${t}`);
+        }
+        if (tables.length > 100) {
+          lines.push(`... ${tables.length - 100} more table(s) not shown.`);
+        }
+        return {
+          response: lines.join('\n'),
+          agent: 'orchestrator/action-broker',
+          runner: 'orchestrator-action-broker',
+          actions: [{
+            id: this.actionId(),
+            type: 'lookup_tables',
+            summary: 'Fetched lookup table list from IRIS.',
+            requiresApproval: false,
+            status: 'executed',
+            endpoint: '/lookups',
+            method: 'GET',
+          }],
+          actionExecution: { mode: 'direct-read', executedCount: 1 },
+        };
+      }
+
+      if (action === 'approval_required') {
+        const proposals = this.buildApprovalProposals(input.message);
+        return {
+          response: [
+            'Execution plan prepared. No production changes were executed yet.',
+            'Human approval is required before deployment or runtime mutations.',
+            'Proposed actions:',
+            ...proposals.map(p => `- ${p.summary}`),
+          ].join('\n'),
+          agent: 'orchestrator/action-broker',
+          runner: 'orchestrator-action-broker',
+          actions: proposals,
+          actionExecution: { mode: 'approval-required', executedCount: 0 },
+        };
+      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      return {
+        response: `I could not execute the requested IRIS action. Error: ${detail}`,
+        agent: 'orchestrator/action-broker',
+        runner: 'orchestrator-action-broker',
+      };
+    }
+
+    return null;
+  }
+
+  private detectAction(message: string):
+    | 'production_topology'
+    | 'production_status'
+    | 'queue_counts'
+    | 'event_log'
+    | 'lookup_tables'
+    | 'approval_required'
+    | null {
+    const lower = message.toLowerCase();
+
+    if ((/(list|show|get).*(production items|production hosts|production topology|all hosts)/.test(lower))
+      || (/(current production items|list current production)/.test(lower))) {
+      return 'production_topology';
+    }
+    if (/(production status|is .*production.*running|current production status)/.test(lower)) {
+      return 'production_status';
+    }
+    if (/\b(queue|queues|queue depth|backlog)\b/.test(lower)) {
+      return 'queue_counts';
+    }
+    if (/(recent errors|event log|production events|last .* errors)/.test(lower)) {
+      return 'event_log';
+    }
+    if (/(lookup tables|list lookups|show lookups)/.test(lower)) {
+      return 'lookup_tables';
+    }
+
+    if (
+      /\b(approve|deploy|rollback|roll back|start production|stop production)\b/.test(lower)
+      || /(create|add|connect|wire|modify|change|update).*(business service|business process|business operation|router|routing rule|transform|dtl|production|host|integration|route)/.test(lower)
+    ) {
+      return 'approval_required';
+    }
+
+    return null;
+  }
+
+  private buildApprovalProposals(message: string): ActionProposal[] {
+    const lower = message.toLowerCase();
+    const proposals: ActionProposal[] = [];
+
+      if (/\b(approve|deploy)\b/.test(lower)) {
+        proposals.push({
+          id: this.actionId(),
+          type: 'approve_deploy_generation',
+          summary: 'Approve the pending generation and deploy to IRIS production.',
+          requiresApproval: true,
+          status: 'pending-approval',
+          endpoint: '/generate/approve',
+          method: 'POST',
+          payload: {},
+        });
+      }
+      if (/\b(rollback|roll back|revert|undo)\b/.test(lower)) {
+        proposals.push({
+          id: this.actionId(),
+        type: 'rollback_version',
+        summary: 'Rollback production to a selected previous version snapshot.',
+          requiresApproval: true,
+          status: 'pending-approval',
+          endpoint: '/lifecycle/rollback/:id',
+          method: 'POST',
+          payload: {},
+        });
+      }
+      if (/\b(start production)\b/.test(lower)) {
+        proposals.push({
+        id: this.actionId(),
+        type: 'start_production',
+        summary: 'Start the target production.',
+          requiresApproval: true,
+          status: 'pending-approval',
+          endpoint: '/production/start',
+          method: 'POST',
+          payload: {},
+        });
+      }
+      if (/\b(stop production)\b/.test(lower)) {
+        proposals.push({
+        id: this.actionId(),
+        type: 'stop_production',
+        summary: 'Stop the target production.',
+          requiresApproval: true,
+          status: 'pending-approval',
+          endpoint: '/production/stop',
+          method: 'POST',
+          payload: {},
+        });
+      }
+    if (proposals.length === 0) {
+      proposals.push({
+        id: this.actionId(),
+        type: 'integration_change_plan',
+        summary: 'Prepare integration change plan and require explicit approval before apply/deploy.',
+        requiresApproval: true,
+        status: 'pending-approval',
+      });
+    }
+    return proposals;
+  }
+
+  private actionId(): string {
+    return `act-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  }
+
+  private unwrapData(raw: unknown): unknown {
+    if (!raw || typeof raw !== 'object') return raw;
+    const obj = raw as Record<string, unknown>;
+    if (obj.status === 'ok' && obj.data !== undefined) return obj.data;
+    return raw;
+  }
+
+  private extractHosts(raw: unknown): Array<{ name: string; className: string; category: string; enabled: boolean }> {
+    const arr = this.extractArray(raw, ['hosts', 'items', 'productionItems', 'businessHosts']);
+    return arr.map((item: unknown) => {
+      const it = (item || {}) as Record<string, unknown>;
+      return {
+        name: String(it.name || it.Name || it.configName || 'Unknown'),
+        className: String(it.className || it.ClassName || 'Unknown'),
+        category: String(it.category || it.Category || it.businessType || 'Unknown'),
+        enabled: Boolean(it.enabled ?? it.Enabled ?? false),
+      };
+    });
+  }
+
+  private extractQueueRows(raw: unknown): Array<{ name: string; count: number }> {
+    const arr = this.extractArray(raw, ['queues', 'items', 'hosts']);
+    return arr.map((item: unknown) => {
+      const it = (item || {}) as Record<string, unknown>;
+      const countRaw = it.count ?? it.queueCount ?? it.depth ?? it.QueueCount ?? 0;
+      const parsed = Number(countRaw);
+      return {
+        name: String(it.name || it.Name || it.host || 'Unknown'),
+        count: Number.isFinite(parsed) ? parsed : 0,
+      };
+    });
+  }
+
+  private extractEvents(raw: unknown): Array<{ when: string; level: string; source: string; message: string }> {
+    const arr = this.extractArray(raw, ['events', 'items', 'rows']);
+    return arr.map((item: unknown) => {
+      const it = (item || {}) as Record<string, unknown>;
+      return {
+        when: String(it.time || it.timestamp || it.TimeLogged || ''),
+        level: String(it.level || it.severity || it.Type || ''),
+        source: String(it.source || it.host || it.Source || ''),
+        message: String(it.message || it.text || it.Description || ''),
+      };
+    });
+  }
+
+  private extractLookupTables(raw: unknown): string[] {
+    const arr = this.extractArray(raw, ['tables', 'items', 'lookups']);
+    return arr.map((item: unknown) => {
+      if (typeof item === 'string') return item;
+      const it = (item || {}) as Record<string, unknown>;
+      return String(it.name || it.tableName || it.Name || 'Unknown');
+    });
+  }
+
+  private extractArray(raw: unknown, keys: string[]): unknown[] {
+    if (Array.isArray(raw)) return raw;
+    if (!raw || typeof raw !== 'object') return [];
+    const obj = raw as Record<string, unknown>;
+    for (const key of keys) {
+      const candidate = obj[key];
+      if (Array.isArray(candidate)) return candidate;
+    }
+    return [];
+  }
+
+  private buildPlannerSystemPrompt(intent: Intent, input: ChatInput): string {
+    return [
+      'You are IRIS Copilot action planner.',
+      'Decide whether to respond conversationally or output executable action proposals.',
+      'Return ONLY JSON. No markdown, no prose outside JSON.',
+      'JSON schema:',
+      '{"mode":"respond|actions","response":"string","actions":[{"id":"string","type":"string","summary":"string","requiresApproval":true|false,"endpoint":"/path","method":"GET|POST","payload":{}}]}',
+      'Rules:',
+      '- Use actions only when the user asks for real environment operations.',
+      '- For read-only queries, propose GET actions with requiresApproval=false and return the requested data directly.',
+      '- For mutating/deployment actions, requiresApproval=true.',
+      '- Do NOT ask for extra confirmation for read-only actions; execute via action broker immediately.',
+      '- Only use endpoints from the provided action catalog.',
+      `Intent: ${intent}`,
+      `Namespace: ${input.namespace}`,
+      `Action catalog: ${JSON.stringify(ACTION_CATALOG)}`,
+    ].join('\n');
+  }
+
+  private buildPlannerUserPrompt(input: ChatInput): string {
+    const history = (input.history || []).slice(-8)
+      .map(h => `${h.role.toUpperCase()}: ${h.content}`)
+      .join('\n');
+    return [
+      `User request: ${input.message}`,
+      history ? `Recent conversation:\n${history}` : '',
+    ].filter(Boolean).join('\n\n');
+  }
+
+  private parsePlannerDecision(text: string): PlannerDecision | null {
+    const trimmed = (text || '').trim();
+    if (!trimmed) return null;
+    const direct = this.tryParseJson(trimmed);
+    if (direct) return direct;
+    const first = trimmed.indexOf('{');
+    const last = trimmed.lastIndexOf('}');
+    if (first !== -1 && last > first) {
+      const extracted = trimmed.substring(first, last + 1);
+      return this.tryParseJson(extracted);
+    }
+    return null;
+  }
+
+  private tryParseJson(text: string): PlannerDecision | null {
+    try {
+      const obj = JSON.parse(text) as PlannerDecision;
+      if (!obj || typeof obj !== 'object') return null;
+      if (obj.mode !== 'respond' && obj.mode !== 'actions') return null;
+      if (typeof obj.response !== 'string') obj.response = '';
+      return obj;
+    } catch {
+      return null;
+    }
+  }
+
+  private normalizePlannedActions(actions: ActionProposal[]): ActionProposal[] {
+    const normalized: ActionProposal[] = [];
+    for (const a of actions) {
+      const endpoint = a.endpoint || '';
+      const method = (a.method || 'GET') as 'GET' | 'POST';
+      const entry = ACTION_CATALOG.find(e =>
+        (a.type && e.type === a.type) || (endpoint && e.endpoint === endpoint && e.method === method)
+      );
+      if (!entry) continue;
+      normalized.push({
+        id: a.id || this.actionId(),
+        type: entry.type,
+        summary: a.summary || entry.description,
+        requiresApproval: entry.requiresApproval,
+        status: entry.requiresApproval ? 'pending-approval' : 'executed',
+        endpoint: entry.endpoint,
+        method: entry.method,
+        payload: a.payload || {},
+      });
+    }
+    return normalized;
+  }
+
+  private summarizeReadResult(type: string, data: unknown): string {
+    switch (type) {
+      case 'production_status': {
+        const d = (data || {}) as Record<string, unknown>;
+        return `Production status: ${String(d.statusText || d.status || 'unknown')} (${String(d.productionName || 'unknown')})`;
+      }
+      case 'production_topology': {
+        const hosts = this.extractHosts(data);
+        return `Production topology read: ${hosts.length} host(s).`;
+      }
+      case 'queue_counts': {
+        const rows = this.extractQueueRows(data);
+        return `Queue snapshot read: ${rows.length} host(s).`;
+      }
+      case 'event_log': {
+        const rows = this.extractEvents(data);
+        return `Recent event log read: ${rows.length} row(s).`;
+      }
+      case 'lookup_tables': {
+        const rows = this.extractLookupTables(data);
+        return `Lookup table list read: ${rows.length} table(s).`;
+      }
+      default:
+        return `${type} executed.`;
+    }
+  }
+
+  private buildReadResponseBlock(type: string, data: unknown, userMessage: string): string {
+    const lower = (userMessage || '').toLowerCase();
+    if (type === 'production_topology') {
+      const hosts = this.extractHosts(data);
+      if (hosts.length === 0) return 'No production hosts were returned.';
+      const namesOnly = /\b(names?|host names?|just.*names?)\b/.test(lower);
+      const fullDetails = /\b(full|detail|all fields|full detail)\b/.test(lower);
+      const lines: string[] = [];
+      lines.push(`Production hosts (${hosts.length}):`);
+      for (const h of hosts) {
+        if (namesOnly && !fullDetails) {
+          lines.push(`- ${h.name}`);
+        } else {
+          lines.push(`- ${h.name} | ${h.className} | ${h.category} | ${h.enabled ? 'Enabled' : 'Disabled'}`);
+        }
+      }
+      return lines.join('\n');
+    }
+    if (type === 'production_status') {
+      const d = (data || {}) as Record<string, unknown>;
+      return [
+        'Production status:',
+        `- Name: ${String(d.productionName || 'Unknown')}`,
+        `- Status: ${String(d.statusText || d.status || 'Unknown')}`,
+        `- Namespace: ${String(d.namespace || 'Unknown')}`,
+      ].join('\n');
+    }
+    if (type === 'queue_counts') {
+      const rows = this.extractQueueRows(data);
+      if (rows.length === 0) return 'No queue rows were returned.';
+      const lines: string[] = [`Queue counts (${rows.length} host(s)):`];
+      for (const r of rows) lines.push(`- ${r.name}: ${r.count}`);
+      return lines.join('\n');
+    }
+    if (type === 'event_log') {
+      const rows = this.extractEvents(data);
+      if (rows.length === 0) return 'No recent event rows were returned.';
+      const lines: string[] = [`Recent events (${rows.length}):`];
+      for (const e of rows.slice(0, 50)) {
+        lines.push(`- ${e.when} | ${e.level} | ${e.source} | ${e.message}`);
+      }
+      return lines.join('\n');
+    }
+    if (type === 'lookup_tables') {
+      const rows = this.extractLookupTables(data);
+      if (rows.length === 0) return 'No lookup tables were returned.';
+      const lines: string[] = [`Lookup tables (${rows.length}):`];
+      for (const t of rows) lines.push(`- ${t}`);
+      return lines.join('\n');
+    }
+    return '';
+  }
+
+  private cleanMechanicalPrompting(text: string): string {
+    if (!text) return text;
+    return text
+      .replace(/\b(Want me to proceed\?|Proceed\?)\b/gi, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   /**
@@ -238,6 +883,19 @@ export class Orchestrator {
 // ============================================================
 // System Prompts
 // ============================================================
+
+const ACTION_CATALOG: ActionCatalogEntry[] = [
+  { type: 'production_status', endpoint: '/production/status', method: 'GET', requiresApproval: false, description: 'Read live production status' },
+  { type: 'production_topology', endpoint: '/production/topology', method: 'GET', requiresApproval: false, description: 'Read current production topology and items' },
+  { type: 'queue_counts', endpoint: '/production/queues', method: 'GET', requiresApproval: false, description: 'Read live queue counts' },
+  { type: 'event_log', endpoint: '/production/events', method: 'GET', requiresApproval: false, description: 'Read recent production events' },
+  { type: 'lookup_tables', endpoint: '/lookups', method: 'GET', requiresApproval: false, description: 'Read lookup table catalog' },
+  { type: 'approve_deploy_generation', endpoint: '/generate/approve', method: 'POST', requiresApproval: true, description: 'Approve and deploy a generated change set' },
+  { type: 'reject_generation', endpoint: '/generate/reject', method: 'POST', requiresApproval: true, description: 'Reject a generated change set' },
+  { type: 'rollback_version', endpoint: '/lifecycle/rollback/:id', method: 'POST', requiresApproval: true, description: 'Rollback to a version snapshot' },
+  { type: 'start_production', endpoint: '/production/start', method: 'POST', requiresApproval: true, description: 'Start production' },
+  { type: 'stop_production', endpoint: '/production/stop', method: 'POST', requiresApproval: true, description: 'Stop production' },
+];
 
 const ORCHESTRATOR_BASE_PROMPT = `You are IRIS Copilot, the AI-powered development platform for NHS hospital Trust Integration Engines.
 

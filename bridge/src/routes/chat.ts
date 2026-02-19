@@ -70,9 +70,19 @@ export function createChatRouter(registry: RunnerRegistry): Router {
         productionStatus,
         preferredRunner,
       });
+      let assembled = '';
 
       for await (const chunk of stream) {
+        if (chunk && typeof chunk.token === 'string' && chunk.token !== '') {
+          assembled += chunk.token;
+        }
         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      }
+
+      // Reliability event: include full assembled response so downstream
+      // consumers can persist content even if token-level parsing is lossy.
+      if (assembled !== '') {
+        res.write(`data: ${JSON.stringify({ finalResponse: assembled, done: false })}\n\n`);
       }
 
       // End stream
