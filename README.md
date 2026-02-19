@@ -1,6 +1,6 @@
 ﻿# IRIS Copilot
 
-English-driven AI platform for InterSystems IRIS HealthConnect TIE implementation lifecycles.
+Human natural language-driven AI platform for InterSystems IRIS HealthConnect TIE implementation lifecycles.
 
 This project is built for NHS Trust integration delivery: users describe clinical integration requirements in natural language, Copilot designs and generates IRIS artifacts, and deployment is executed only after explicit human approval.
 
@@ -8,7 +8,7 @@ This project is built for NHS Trust integration delivery: users describe clinica
 
 IRIS Copilot should support full lifecycle delivery in one controlled workflow:
 
-1. Capture requirement in English (or any language)
+1. Capture requirements in human natural language (English and other languages)
 2. Discover current IRIS production context
 3. Design topology deltas (BS/BP/BO/DTL/rules/lookups)
 4. Generate compilable ObjectScript artifacts
