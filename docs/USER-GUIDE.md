@@ -411,6 +411,7 @@ A: Any language. The AI responds in the same language you use. Technical terms (
 ## 13. E2E Validation Runbook
 
 Use this checklist to validate production-ready behavior end to end.
+For the full generic gateway validation payloads, see [E2E-GENERIC-VALIDATION.md](E2E-GENERIC-VALIDATION.md).
 
 ### Pre-check (5 minutes)
 
