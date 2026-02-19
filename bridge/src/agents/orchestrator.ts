@@ -559,10 +559,22 @@ export class Orchestrator {
   }
 
   private unwrapData(raw: unknown): unknown {
-    if (!raw || typeof raw !== 'object') return raw;
-    const obj = raw as Record<string, unknown>;
-    if (obj.status === 'ok' && obj.data !== undefined) return obj.data;
-    return raw;
+    let current: unknown = raw;
+    for (let i = 0; i < 4; i++) {
+      if (!current || typeof current !== 'object') break;
+      const obj = current as Record<string, unknown>;
+      if (obj.status === 'ok' && obj.data !== undefined) {
+        current = obj.data;
+        continue;
+      }
+      // Generic /ai/operate envelope shape: { data: <payload>, meta: {...}, dryRun: ... }
+      if (obj.data !== undefined && (obj.meta !== undefined || obj.dryRun !== undefined)) {
+        current = obj.data;
+        continue;
+      }
+      break;
+    }
+    return current;
   }
 
   private extractHosts(raw: unknown): Array<{ name: string; className: string; category: string; enabled: boolean }> {
@@ -1069,21 +1081,17 @@ const ACTION_CATALOG: ActionCatalogEntry[] = [
   { type: 'invoke_classmethod', op: 'execute', target: 'class/invoke', endpoint: '/operate', method: 'POST', requiresApproval: true, description: 'Invoke policy-approved class method with args.className, args.method, args.arguments[]' },
 ];
 
-const ORCHESTRATOR_BASE_PROMPT = `You are IRIS Copilot, the AI-powered development platform for NHS hospital Trust Integration Engines.
+const ORCHESTRATOR_BASE_PROMPT = `You are IRIS Copilot, an AI assistant for InterSystems IRIS / HealthConnect integration lifecycle work.
 
-You are embedded within an InterSystems IRIS HealthConnect instance. Users interact with you through a chat interface to build, modify, monitor, and manage clinical system integrations — WITHOUT writing any ObjectScript code themselves.
+You are embedded in an IRIS instance. Users interact via chat to build, modify, monitor, test, and govern integrations using natural language.
 
-You are currently assisting with the NHS Bradford Teaching Hospitals Trust Integration Engine:
-- 1,224 COS classes, 150+ production hosts, 74 clinical system interfaces
-- Main production: BRI.Productions.TEST
-- Key upstream systems: Cerner (TCP 30000-30007), IPM/PAS (HTTP), CRIS (TCP 7982), WinPath (TCP 35100), TelePath (TCP 9985)
-- Key downstream: A&E, RTADT, BadgerNet, SystmOne, ICE New, ICNET, Waba, AScribe
-- Architecture: Hub-and-spoke with EnsLib.HL7.MsgRouter.RoutingEngine distributor/router pattern
-- HL7 schemas in use: 2.3, 2.3.1, 2.4, CERNER2.3, custom schemas
+Work generically for the current namespace and production context discovered at runtime.
+Do not assume any specific customer/site, production name, host naming convention, or integration topology unless explicitly provided by live API data in this session.
 
-AI-generated classes use the prefix: AIAgent.Generated.<Domain>.<ComponentType>.<Name>
+For generated classes, use a neutral default prefix:
+AIAgent.Generated.<Domain>.<ComponentType>.<Name>
 
-Respond in the user's language (English, Spanish, Chinese, etc.). Be precise about HL7 field paths and IRIS APIs.`;
+Respond in the user's language and be precise about HL7 paths, IRIS APIs, and execution/approval boundaries.`;
 
 const NEW_INTEGRATION_PROMPT = `
 
