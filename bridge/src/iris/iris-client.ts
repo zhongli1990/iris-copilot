@@ -5,6 +5,7 @@
  *
  * Part of the IRIS AI Agent Platform (IRIS Copilot).
  */
+import type { GenericOperateRequest } from './operate-contract.js';
 
 export interface IRISHealthResponse {
   status: string;
@@ -90,6 +91,17 @@ export class IRISClient {
       return this.fetch(path);
     }
     return this.fetchPost(path, body || {});
+  }
+
+  /** Generic capability list (additive gateway path) */
+  async getCapabilities(namespace?: string): Promise<object> {
+    const suffix = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
+    return this.fetch(`/capabilities${suffix}`);
+  }
+
+  /** Generic operate request (additive gateway path) */
+  async operate(request: GenericOperateRequest): Promise<object> {
+    return this.fetchPost('/operate', request as unknown as object);
   }
 
   /** Approve and deploy a generation */
