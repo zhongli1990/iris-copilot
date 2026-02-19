@@ -46,6 +46,7 @@ CLASS_ORDER = [
     "AIAgent/Templates/MessageClass.cls",
     "AIAgent/Templates/Factory.cls",
     "AIAgent/API/Dispatcher.cls",
+    "AIAgent/Test/E2E.cls",
     "AIAgent/UI/Chat.cls",
     "AIAgent/Install/Installer.cls",
 ]
