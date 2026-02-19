@@ -929,6 +929,9 @@ ClassMethod Operate() As %Status
             } elseif target = "targets" {
                 set result.data = ..BuildTargetCatalog()
                 set meta.capability = "discover.targets"
+            } elseif target = "invoke-policy" {
+                set result.data = ..GetInvocationPolicy()
+                set meta.capability = "discover.invoke.policy"
             } else {
                 do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("UNSUPPORTED_TARGET", "Unsupported discover target: "_target, 400))
                 return $$$OK
@@ -969,6 +972,13 @@ ClassMethod Operate() As %Status
                 if pattern = "" set pattern = "AIAgent.Generated.%"
                 set result.data = ##class(AIAgent.Engine.CodeManager).ListClasses(pattern)
                 set meta.capability = "class.catalog.read"
+            } elseif target = "dictionary/classes" {
+                set pattern = args.%Get("pattern")
+                if pattern = "" set pattern = "%"
+                set maxRows = +args.%Get("maxRows")
+                if maxRows<1 set maxRows = 500
+                set result.data = ..ListDictionaryClasses(pattern, maxRows)
+                set meta.capability = "dictionary.classes.read"
             } elseif $extract(target,1,6) = "class/" {
                 set className = $extract(target,7,*)
                 if '##class(AIAgent.Engine.CodeManager).ClassExists(className) {
@@ -985,6 +995,18 @@ ClassMethod Operate() As %Status
                 set obj.source = source
                 set result.data = obj
                 set meta.capability = "class.read"
+            } elseif $extract(target,1,10) = "classmeta/" {
+                set className = $extract(target,11,*)
+                if className = "" {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "classmeta target requires class name, e.g. classmeta/AIAgent.API.Dispatcher", 400))
+                    return $$$OK
+                }
+                if '##class(AIAgent.Engine.CodeManager).ClassExists(className) {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("NOT_FOUND", "Class '"_className_"' not found", 404))
+                    return $$$OK
+                }
+                set result.data = ..GetClassMetadata(className)
+                set meta.capability = "class.meta.read"
             } elseif target = "lifecycle/versions" {
                 set page = args.%Get("page")
                 if page = "" set page = 1
@@ -1088,6 +1110,40 @@ ClassMethod Operate() As %Status
                 set obj.log = rollbackLog
                 set result.data = obj
                 set meta.capability = "execute.lifecycle.rollback"
+            } elseif target = "class/invoke" {
+                set className = args.%Get("className")
+                set methodName = args.%Get("method")
+                if (className = "") || (methodName = "") {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.className' and 'args.method' are required for target class/invoke", 400))
+                    return $$$OK
+                }
+                set allowed = ..IsInvocationAllowed(className, methodName, .denyReason)
+                if 'allowed {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("FORBIDDEN", "Invocation denied by policy: "_denyReason, 403))
+                    return $$$OK
+                }
+                if dryRun {
+                    set plan = ##class(%DynamicObject).%New()
+                    set plan.status = "dry_run"
+                    set plan.target = target
+                    set plan.className = className
+                    set plan.method = methodName
+                    set plan.message = "Invocation allowed by policy but not executed because dryRun=true"
+                    set result.data = plan
+                    set meta.capability = "execute.class.invoke"
+                } else {
+                    set invokeResult = ..InvokeClassMethod(className, methodName, args.%Get("arguments"), .invokeSc)
+                    if $$$ISERR(invokeSc) {
+                        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(invokeSc))
+                        return $$$OK
+                    }
+                    set obj = ##class(%DynamicObject).%New()
+                    set obj.className = className
+                    set obj.method = methodName
+                    set obj.result = invokeResult
+                    set result.data = obj
+                    set meta.capability = "execute.class.invoke"
+                }
             } else {
                 do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("UNSUPPORTED_TARGET", "Unsupported execute target: "_target, 400))
                 return $$$OK
@@ -1176,6 +1232,7 @@ ClassMethod BuildCapabilities(ns As %String = "") As %DynamicObject [ Private ]
     do caps.%Push(..Cap("discover.capabilities", ns, 1))
     do caps.%Push(..Cap("discover.namespaces", ns, 1))
     do caps.%Push(..Cap("discover.targets", ns, 1))
+    do caps.%Push(..Cap("discover.invoke.policy", ns, 1))
     do caps.%Push(..Cap("production.status.read", ns, data.ensembleAvailable))
     do caps.%Push(..Cap("production.topology.read", ns, data.ensembleAvailable))
     do caps.%Push(..Cap("production.events.read", ns, data.ensembleAvailable))
@@ -1185,6 +1242,8 @@ ClassMethod BuildCapabilities(ns As %String = "") As %DynamicObject [ Private ]
     do caps.%Push(..Cap("hl7schemas.read", ns, 1))
     do caps.%Push(..Cap("class.catalog.read", ns, 1))
     do caps.%Push(..Cap("class.read", ns, 1))
+    do caps.%Push(..Cap("class.meta.read", ns, 1))
+    do caps.%Push(..Cap("dictionary.classes.read", ns, 1))
     do caps.%Push(..Cap("sql.read", ns, 1))
     do caps.%Push(..Cap("lifecycle.versions.read", ns, 1))
 
@@ -1194,6 +1253,7 @@ ClassMethod BuildCapabilities(ns As %String = "") As %DynamicObject [ Private ]
     do caps.%Push(..Cap("execute.production.start", ns, data.ensembleAvailable, "approval_required"))
     do caps.%Push(..Cap("execute.production.stop", ns, data.ensembleAvailable, "approval_required"))
     do caps.%Push(..Cap("execute.lifecycle.rollback", ns, 1, "approval_required"))
+    do caps.%Push(..Cap("execute.class.invoke", ns, 1, "approval_required_policy_guarded"))
     do caps.%Push(..Cap("mutate.production.host.add", ns, data.ensembleAvailable, "approval_required"))
     do caps.%Push(..Cap("mutate.production.host.remove", ns, data.ensembleAvailable, "approval_required"))
     do caps.%Push(..Cap("mutate.production.host.settings", ns, data.ensembleAvailable, "approval_required"))
@@ -1219,6 +1279,7 @@ ClassMethod BuildTargetCatalog() As %DynamicArray [ Private ]
     do arr.%Push("discover/capabilities")
     do arr.%Push("discover/namespaces")
     do arr.%Push("discover/targets")
+    do arr.%Push("discover/invoke-policy")
     do arr.%Push("query/production/status")
     do arr.%Push("query/production/topology")
     do arr.%Push("query/production/events")
@@ -1227,7 +1288,9 @@ ClassMethod BuildTargetCatalog() As %DynamicArray [ Private ]
     do arr.%Push("query/lookup/<TableName>")
     do arr.%Push("query/hl7schemas")
     do arr.%Push("query/classes")
+    do arr.%Push("query/dictionary/classes")
     do arr.%Push("query/class/<ClassName>")
+    do arr.%Push("query/classmeta/<ClassName>")
     do arr.%Push("query/lifecycle/versions")
     do arr.%Push("query/sql/select")
     do arr.%Push("mutate/production/host/add (approval-gated)")
@@ -1238,8 +1301,238 @@ ClassMethod BuildTargetCatalog() As %DynamicArray [ Private ]
     do arr.%Push("execute/production/start (approval-gated)")
     do arr.%Push("execute/production/stop (approval-gated)")
     do arr.%Push("execute/lifecycle/rollback (approval-gated)")
+    do arr.%Push("execute/class/invoke (approval-gated, policy-guarded)")
     do arr.%Push("govern/* (approval-gated; pending rollout)")
     return arr
+}
+
+ClassMethod ListDictionaryClasses(pattern As %String = "%", maxRows As %Integer = 500) As %DynamicArray [ Private ]
+{
+    set arr = ##class(%DynamicArray).%New()
+    set sql = "SELECT TOP ? Name, Super, ProcedureBlock FROM %Dictionary.ClassDefinition WHERE Name LIKE ? ORDER BY Name"
+    set stmt = ##class(%SQL.Statement).%New()
+    do stmt.%Prepare(sql)
+    set rs = stmt.%Execute(maxRows, pattern)
+    while rs.%Next() {
+        set obj = ##class(%DynamicObject).%New()
+        set obj.name = rs.%GetData(1)
+        set obj.super = rs.%GetData(2)
+        set obj.procedureBlock = rs.%GetData(3)
+        do arr.%Push(obj)
+    }
+    return arr
+}
+
+ClassMethod GetClassMetadata(className As %String) As %DynamicObject [ Private ]
+{
+    set out = ##class(%DynamicObject).%New()
+    set out.className = className
+    set methods = ##class(%DynamicArray).%New()
+    set properties = ##class(%DynamicArray).%New()
+    set parameters = ##class(%DynamicArray).%New()
+    set out.methods = methods
+    set out.properties = properties
+    set out.parameters = parameters
+
+    set def = ##class(%Dictionary.ClassDefinition).%OpenId(className)
+    if $isobject(def) {
+        set out.super = def.Super
+        set out.description = def.Description
+        set out.procedureBlock = def.ProcedureBlock
+    }
+
+    set stmtM = ##class(%SQL.Statement).%New()
+    do stmtM.%Prepare("SELECT Name, ReturnType, FormalSpec, ClassMethod, Final, Private FROM %Dictionary.MethodDefinition WHERE parent = ? ORDER BY Name")
+    set rsM = stmtM.%Execute(className)
+    while rsM.%Next() {
+        set m = ##class(%DynamicObject).%New()
+        set m.name = rsM.%GetData(1)
+        set m.returnType = rsM.%GetData(2)
+        set m.formalSpec = rsM.%GetData(3)
+        set m.classMethod = rsM.%GetData(4)
+        set m.final = rsM.%GetData(5)
+        set m.private = rsM.%GetData(6)
+        do methods.%Push(m)
+    }
+
+    set stmtP = ##class(%SQL.Statement).%New()
+    do stmtP.%Prepare("SELECT Name, Type, Required, InitialExpression FROM %Dictionary.PropertyDefinition WHERE parent = ? ORDER BY Name")
+    set rsP = stmtP.%Execute(className)
+    while rsP.%Next() {
+        set p = ##class(%DynamicObject).%New()
+        set p.name = rsP.%GetData(1)
+        set p.type = rsP.%GetData(2)
+        set p.required = rsP.%GetData(3)
+        set p.initialExpression = rsP.%GetData(4)
+        do properties.%Push(p)
+    }
+
+    set stmtQ = ##class(%SQL.Statement).%New()
+    do stmtQ.%Prepare("SELECT Name, Default FROM %Dictionary.ParameterDefinition WHERE parent = ? ORDER BY Name")
+    set rsQ = stmtQ.%Execute(className)
+    while rsQ.%Next() {
+        set q = ##class(%DynamicObject).%New()
+        set q.name = rsQ.%GetData(1)
+        set q.default = rsQ.%GetData(2)
+        do parameters.%Push(q)
+    }
+
+    return out
+}
+
+ClassMethod GetInvocationPolicy() As %DynamicObject [ Private ]
+{
+    set obj = ##class(%DynamicObject).%New()
+    set mode = $get(^AIAgent.Config("GenericOperate","Invoke","Mode"), "allow-by-default")
+    set obj.mode = mode
+
+    set allow = ##class(%DynamicArray).%New()
+    set i = ""
+    for {
+        set i = $order(^AIAgent.Config("GenericOperate","Invoke","AllowClassPattern", i))
+        quit:i=""
+        do allow.%Push(^AIAgent.Config("GenericOperate","Invoke","AllowClassPattern", i))
+    }
+    if allow.%Size()=0 {
+        do allow.%Push("%")
+    }
+    set obj.allowClassPattern = allow
+
+    set deny = ##class(%DynamicArray).%New()
+    do deny.%Push("%SYS.%")
+    do deny.%Push("%SYSTEM.%")
+    do deny.%Push("Security.%")
+    do deny.%Push("%Installer.%")
+    set obj.denyClassPattern = deny
+
+    set denyMethods = ##class(%DynamicArray).%New()
+    do denyMethods.%Push("Delete%")
+    do denyMethods.%Push("Purge%")
+    do denyMethods.%Push("Drop%")
+    do denyMethods.%Push("Shutdown%")
+    do denyMethods.%Push("Kill%")
+    set obj.denyMethodPattern = denyMethods
+
+    set obj.maxArguments = +$get(^AIAgent.Config("GenericOperate","Invoke","MaxArguments"), 4)
+    return obj
+}
+
+ClassMethod IsInvocationAllowed(className As %String, methodName As %String, Output reason As %String) As %Boolean [ Private ]
+{
+    set reason = ""
+    set policy = ..GetInvocationPolicy()
+    set mode = policy.%Get("mode")
+    if mode = "" set mode = "allow-by-default"
+
+    set deny = policy.%Get("denyClassPattern")
+    if $isobject(deny) {
+        for i=0:1:deny.%Size()-1 {
+            set p = deny.%Get(i)
+            if ..LikePattern(className, p) {
+                set reason = "Class pattern denied ("_p_")"
+                quit 0
+            }
+        }
+    }
+
+    set denyM = policy.%Get("denyMethodPattern")
+    if $isobject(denyM) {
+        for i=0:1:denyM.%Size()-1 {
+            set p = denyM.%Get(i)
+            if ..LikePattern(methodName, p) {
+                set reason = "Method pattern denied ("_p_")"
+                quit 0
+            }
+        }
+    }
+
+    set allow = policy.%Get("allowClassPattern")
+    set classAllowed = (mode="allow-by-default")
+    if $isobject(allow) {
+        set classAllowed = 0
+        for i=0:1:allow.%Size()-1 {
+            set p = allow.%Get(i)
+            if ..LikePattern(className, p) {
+                set classAllowed = 1
+                quit
+            }
+        }
+    }
+    if 'classAllowed {
+        set reason = "Class not matched by allow policy"
+        quit 0
+    }
+
+    if '##class(%Dictionary.ClassDefinition).%ExistsId(className) {
+        set reason = "Class not found: "_className
+        quit 0
+    }
+    set stmt = ##class(%SQL.Statement).%New()
+    do stmt.%Prepare("SELECT COUNT(*) FROM %Dictionary.MethodDefinition WHERE parent = ? AND Name = ? AND ClassMethod = 1")
+    set rs = stmt.%Execute(className, methodName)
+    set found = 0
+    if rs.%Next() set found = +rs.%GetData(1)
+    if 'found {
+        set reason = "ClassMethod not found: "_className_"."_methodName
+        quit 0
+    }
+    quit 1
+}
+
+ClassMethod InvokeClassMethod(className As %String, methodName As %String, args As %DynamicArray, Output sc As %Status) As %String [ Private ]
+{
+    set sc = $$$OK
+    try {
+        set maxArgs = +$get(^AIAgent.Config("GenericOperate","Invoke","MaxArguments"), 4)
+        if '$isobject(args) {
+            set argCount = 0
+        } else {
+            set argCount = args.%Size()
+        }
+        if argCount>maxArgs {
+            set sc = $$$ERROR($$$GeneralError, "Too many arguments. Max="_maxArgs)
+            quit ""
+        }
+
+        if argCount=0 {
+            quit $classmethod(className, methodName)
+        } elseif argCount=1 {
+            quit $classmethod(className, methodName, args.%Get(0))
+        } elseif argCount=2 {
+            quit $classmethod(className, methodName, args.%Get(0), args.%Get(1))
+        } elseif argCount=3 {
+            quit $classmethod(className, methodName, args.%Get(0), args.%Get(1), args.%Get(2))
+        } elseif argCount=4 {
+            quit $classmethod(className, methodName, args.%Get(0), args.%Get(1), args.%Get(2), args.%Get(3))
+        }
+    } catch ex {
+        set sc = ex.AsStatus()
+    }
+    quit ""
+}
+
+ClassMethod LikePattern(value As %String, pattern As %String) As %Boolean [ Private ]
+{
+    // Lightweight SQL-LIKE style matcher for % wildcard.
+    if pattern = "%" quit 1
+    if pattern = value quit 1
+    if pattern'["%" quit 0
+
+    set starts = ($extract(pattern,1)="%")
+    set ends = ($extract(pattern,*)="%")
+    set core = pattern
+    if starts set core = $extract(core,2,*)
+    if ends set core = $extract(core,1,*-1)
+    if core = "" quit 1
+
+    if starts,ends {
+        quit (value[core)
+    } elseif ends {
+        quit ($extract(value,1,$length(core))=core)
+    } elseif starts {
+        quit ($extract(value,*-$length(core)+1,*)=core)
+    }
+    quit 0
 }
 
 // ---------------------------------------------------------------------------

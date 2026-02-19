@@ -755,6 +755,19 @@ export class Orchestrator {
         const rowCount = Number(d.rowCount || this.extractArray(d.rows, ['rows']).length || 0);
         return `SQL read executed: ${rowCount} row(s).`;
       }
+      case 'class_meta_read': {
+        const d = (data || {}) as Record<string, unknown>;
+        const m = this.extractArray(d.methods, ['methods']).length;
+        const p = this.extractArray(d.properties, ['properties']).length;
+        return `Class metadata read: ${String(d.className || 'unknown')} (${m} method(s), ${p} propert(ies)).`;
+      }
+      case 'dictionary_classes_read': {
+        const rows = this.extractArray(data, ['items', 'rows', 'data']);
+        return `Dictionary class catalog read: ${rows.length} class(es).`;
+      }
+      case 'invoke_policy_read': {
+        return 'Invocation policy read.';
+      }
       default:
         return `${target || type} executed.`;
     }
@@ -849,6 +862,46 @@ export class Orchestrator {
       if (rows.length > 25) lines.push(`... ${rows.length - 25} more row(s) omitted.`);
       return lines.join('\n');
     }
+    if (resolvedType === 'class_meta_read') {
+      const d = (data || {}) as Record<string, unknown>;
+      const methods = this.extractArray(d.methods, ['methods']);
+      const properties = this.extractArray(d.properties, ['properties']);
+      const parameters = this.extractArray(d.parameters, ['parameters']);
+      const lines: string[] = [
+        `Class metadata: ${String(d.className || 'Unknown')}`,
+        `- Super: ${String(d.super || '')}`,
+        `- Methods: ${methods.length}`,
+        `- Properties: ${properties.length}`,
+        `- Parameters: ${parameters.length}`,
+      ];
+      for (const m of methods.slice(0, 30)) {
+        const it = (m || {}) as Record<string, unknown>;
+        lines.push(`- Method ${String(it.name || '')}(${String(it.formalSpec || '')}) -> ${String(it.returnType || '%Status')}`);
+      }
+      return lines.join('\n');
+    }
+    if (resolvedType === 'dictionary_classes_read') {
+      const rows = this.extractArray(data, ['items', 'rows', 'data']);
+      if (rows.length === 0) return 'No classes were returned.';
+      const lines: string[] = [`Classes (${rows.length}):`];
+      for (const r of rows.slice(0, 200)) {
+        const it = (r || {}) as Record<string, unknown>;
+        lines.push(`- ${String(it.name || '')} | ${String(it.super || '')}`);
+      }
+      if (rows.length > 200) lines.push(`... ${rows.length - 200} more class(es) omitted.`);
+      return lines.join('\n');
+    }
+    if (resolvedType === 'invoke_policy_read') {
+      const d = (data || {}) as Record<string, unknown>;
+      return [
+        'Invocation policy:',
+        `- Mode: ${String(d.mode || 'unknown')}`,
+        `- Max arguments: ${String(d.maxArguments || '')}`,
+      ].join('\n');
+    }
+    if (data && typeof data === 'object') {
+      return `Result:\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``;
+    }
     return '';
   }
 
@@ -862,6 +915,10 @@ export class Orchestrator {
     if (t.startsWith('lookup/')) return 'lookup_read';
     if (t === 'hl7schemas') return 'hl7schemas_read';
     if (t === 'sql/select') return 'sql_read';
+    if (t.startsWith('classmeta/')) return 'class_meta_read';
+    if (t === 'dictionary/classes') return 'dictionary_classes_read';
+    if (t === 'invoke-policy') return 'invoke_policy_read';
+    if (t === 'discover/invoke-policy') return 'invoke_policy_read';
     if (type && type !== 'unknown') return type;
     return type || 'unknown';
   }
@@ -997,6 +1054,9 @@ const ACTION_CATALOG: ActionCatalogEntry[] = [
   { type: 'lookup_tables', op: 'query', target: 'lookups', endpoint: '/lookups', method: 'GET', requiresApproval: false, description: 'Read lookup table catalog' },
   { type: 'lookup_read', op: 'query', target: 'lookup/ErrorCodes', endpoint: '/lookups/ErrorCodes', method: 'GET', requiresApproval: false, description: 'Read a lookup table content (set target to lookup/<TableName>)' },
   { type: 'hl7schemas_read', op: 'query', target: 'hl7schemas', endpoint: '/hl7schemas', method: 'GET', requiresApproval: false, description: 'Read HL7 schema catalog' },
+  { type: 'dictionary_classes_read', op: 'query', target: 'dictionary/classes', endpoint: '/operate', method: 'POST', requiresApproval: false, description: 'Read dictionary class catalog (args.pattern, args.maxRows)' },
+  { type: 'class_meta_read', op: 'query', target: 'classmeta/AIAgent.API.Dispatcher', endpoint: '/operate', method: 'POST', requiresApproval: false, description: 'Read class metadata (set target to classmeta/<ClassName>)' },
+  { type: 'invoke_policy_read', op: 'discover', target: 'invoke-policy', endpoint: '/operate', method: 'POST', requiresApproval: false, description: 'Read invoke policy guards' },
   { type: 'sql_read', op: 'query', target: 'sql/select', endpoint: '/sql', method: 'POST', requiresApproval: false, description: 'Run read-only SQL SELECT via generic operate args.query' },
   { type: 'approve_deploy_generation', op: 'execute', target: 'generation/approve', endpoint: '/generate/approve', method: 'POST', requiresApproval: true, description: 'Approve and deploy a generated change set' },
   { type: 'reject_generation', op: 'execute', target: 'generation/reject', endpoint: '/generate/reject', method: 'POST', requiresApproval: true, description: 'Reject a generated change set' },
@@ -1006,6 +1066,7 @@ const ACTION_CATALOG: ActionCatalogEntry[] = [
   { type: 'add_production_host', op: 'mutate', target: 'production/host/add', endpoint: '/operate', method: 'POST', requiresApproval: true, description: 'Add business host to production' },
   { type: 'remove_production_host', op: 'mutate', target: 'production/host/remove', endpoint: '/operate', method: 'POST', requiresApproval: true, description: 'Remove business host from production' },
   { type: 'update_production_host_settings', op: 'mutate', target: 'production/host/settings', endpoint: '/operate', method: 'POST', requiresApproval: true, description: 'Update business host settings in production' },
+  { type: 'invoke_classmethod', op: 'execute', target: 'class/invoke', endpoint: '/operate', method: 'POST', requiresApproval: true, description: 'Invoke policy-approved class method with args.className, args.method, args.arguments[]' },
 ];
 
 const ORCHESTRATOR_BASE_PROMPT = `You are IRIS Copilot, the AI-powered development platform for NHS hospital Trust Integration Engines.

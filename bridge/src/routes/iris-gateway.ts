@@ -22,6 +22,7 @@ export function createIrisGatewayRouter(): Router {
       res.status(503).json({
         status: 'disabled',
         message: 'Generic operate gateway disabled by configuration.',
+        remediation: 'Set GENERIC_OPERATE_ENABLED=1 in bridge/.env and restart bridge.',
       });
       return;
     }
@@ -42,6 +43,7 @@ export function createIrisGatewayRouter(): Router {
       res.status(503).json({
         status: 'disabled',
         message: 'Generic operate gateway disabled by configuration.',
+        remediation: 'Set GENERIC_OPERATE_ENABLED=1 in bridge/.env and restart bridge.',
       });
       return;
     }
