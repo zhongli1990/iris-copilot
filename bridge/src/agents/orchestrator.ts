@@ -106,6 +106,13 @@ export class Orchestrator {
     // Classify intent to enrich the system prompt
     const intent = this.classifyIntent(input.message);
 
+    // Deterministic direct operations first for explicit actionable asks
+    // (e.g., dry-run host mutations, class catalog queries with patterns).
+    if (this.parseDirectGenericAction(input.message)) {
+      const direct = await this.tryHandleActionableRequest(input);
+      if (direct) return direct;
+    }
+
     // Model-first action planning: use Claude/Codex to decide actions or plain response.
     const planned = await this.tryModelPlannedActions(input, intent, runner);
     if (planned) {
@@ -162,6 +169,17 @@ export class Orchestrator {
     }
 
     const intent = this.classifyIntent(input.message);
+
+    if (this.parseDirectGenericAction(input.message)) {
+      const direct = await this.tryHandleActionableRequest(input);
+      if (direct) {
+        yield { token: '', done: false, runner: direct.runner };
+        yield { token: direct.response, done: false };
+        yield { token: '', done: true };
+        return;
+      }
+    }
+
     const planned = await this.tryModelPlannedActions(input, intent, runner);
     if (planned) {
       yield { token: '', done: false, runner: planned.runner };
@@ -287,6 +305,74 @@ export class Orchestrator {
   }
 
   private async tryHandleActionableRequest(input: ChatInput): Promise<ChatOutput | null> {
+    const parsedGeneric = this.parseDirectGenericAction(input.message);
+    if (parsedGeneric?.action.op && parsedGeneric.action.target) {
+      const isRead = parsedGeneric.action.op === 'query' || parsedGeneric.action.op === 'discover';
+      const dryRun = parsedGeneric.dryRun;
+      if (isRead || dryRun) {
+        try {
+          const opResult = await this.irisClient.operate({
+            namespace: input.namespace,
+            op: parsedGeneric.action.op,
+            target: parsedGeneric.action.target,
+            action: isRead ? 'read' : 'apply',
+            args: (parsedGeneric.action.payload?.args || parsedGeneric.action.payload || {}) as Record<string, unknown>,
+            dryRun,
+          });
+          const data = this.unwrapData(opResult);
+          const lines: string[] = [];
+          if (dryRun && !isRead) {
+            lines.push('Dry-run executed. No production mutation was applied.');
+            lines.push('');
+            lines.push(`Result:\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``);
+          } else {
+            const block = this.buildReadResponseBlock(parsedGeneric.action.type, parsedGeneric.action.target, data, input.message);
+            lines.push(block || `Action executed: ${parsedGeneric.action.target}`);
+            const summary = this.summarizeReadResult(parsedGeneric.action.type, parsedGeneric.action.target, data);
+            if (summary) {
+              lines.push('');
+              lines.push('Execution results:');
+              lines.push(`- ${summary}`);
+            }
+          }
+          return {
+            response: lines.join('\n'),
+            agent: 'orchestrator/action-broker',
+            runner: 'orchestrator-action-broker',
+            actions: [{
+              ...parsedGeneric.action,
+              requiresApproval: false,
+              status: 'executed',
+            }],
+            actionExecution: { mode: 'direct-read', executedCount: 1 },
+          };
+        } catch (err) {
+          return {
+            response: `I could not execute the requested operation. Error: ${err instanceof Error ? err.message : String(err)}`,
+            agent: 'orchestrator/action-broker',
+            runner: 'orchestrator-action-broker',
+          };
+        }
+      }
+
+      return {
+        response: [
+          'Execution plan prepared. No production changes were executed yet.',
+          'Human approval is required before applying this mutation.',
+          'Proposed actions:',
+          `- ${parsedGeneric.action.summary}`,
+        ].join('\n'),
+        agent: 'orchestrator/action-broker',
+        runner: 'orchestrator-action-broker',
+        actions: [{
+          ...parsedGeneric.action,
+          requiresApproval: true,
+          status: 'pending-approval',
+        }],
+        actionExecution: { mode: 'approval-required', executedCount: 0 },
+      };
+    }
+
     const action = this.detectAction(input.message);
     if (!action) return null;
 
@@ -492,6 +578,13 @@ export class Orchestrator {
 
   private buildApprovalProposals(message: string): ActionProposal[] {
     const lower = message.toLowerCase();
+    const parsedGeneric = this.parseDirectGenericAction(message);
+    if (parsedGeneric && parsedGeneric.action.requiresApproval) {
+      return [{
+        ...parsedGeneric.action,
+        status: 'pending-approval',
+      }];
+    }
     const proposals: ActionProposal[] = [];
 
       if (/\b(approve|deploy)\b/.test(lower)) {
@@ -552,6 +645,90 @@ export class Orchestrator {
       });
     }
     return proposals;
+  }
+
+  private parseDirectGenericAction(message: string): { action: ActionProposal; dryRun: boolean } | null {
+    const text = message || '';
+    const lower = text.toLowerCase();
+    const dryRun = /\bdry[- ]?run\b|\bpreview\b|\bplan only\b|\bdry run only\b/.test(lower);
+
+    if (/\blist classes\b|\bshow classes\b|\bclass list\b/.test(lower)) {
+      const pattern = this.extractClassPattern(text);
+      return {
+        dryRun: false,
+        action: {
+          id: this.actionId(),
+          type: 'dictionary_classes_read',
+          op: 'query',
+          target: 'dictionary/classes',
+          summary: `List classes matching pattern '${pattern}'.`,
+          requiresApproval: false,
+          status: 'executed',
+          payload: { args: { pattern, maxRows: 500 } },
+        },
+      };
+    }
+
+    const hostNameMatch = text.match(/\b(?:named|called)\s+([A-Za-z0-9_.-]+)/i);
+    if (/\badd\b.*\bbusiness host\b/.test(lower) && hostNameMatch) {
+      const hostName = hostNameMatch[1];
+      let className = 'Ens.BusinessService';
+      if (/\bbusiness process\b|\bprocess\b/.test(lower)) className = 'Ens.BusinessProcessBPL';
+      if (/\bbusiness operation\b|\boperation\b/.test(lower)) className = 'Ens.BusinessOperation';
+      const enabled = !/\bdisabled\b/.test(lower);
+      return {
+        dryRun,
+        action: {
+          id: this.actionId(),
+          type: 'add_production_host',
+          op: 'mutate',
+          target: 'production/host/add',
+          summary: `Add host '${hostName}' (${className}), enabled=${enabled ? 'true' : 'false'}.`,
+          requiresApproval: true,
+          status: 'pending-approval',
+          payload: {
+            args: {
+              config: {
+                name: hostName,
+                className,
+                category: 'AIGenerated',
+                enabled,
+              },
+            },
+          },
+        },
+      };
+    }
+
+    if ((/\bremove\b|\bdelete\b/.test(lower)) && /\bbusiness host\b/.test(lower) && hostNameMatch) {
+      const hostName = hostNameMatch[1];
+      return {
+        dryRun,
+        action: {
+          id: this.actionId(),
+          type: 'remove_production_host',
+          op: 'mutate',
+          target: 'production/host/remove',
+          summary: `Remove host '${hostName}'.`,
+          requiresApproval: true,
+          status: 'pending-approval',
+          payload: { args: { name: hostName } },
+        },
+      };
+    }
+
+    return null;
+  }
+
+  private extractClassPattern(message: string): string {
+    const pkgMatch = message.match(/\b(?:in|under|from)\s+([A-Za-z0-9_.%*]+)\s*(?:packages?|package)?/i);
+    if (!pkgMatch) return 'AIAgent.%';
+    let raw = pkgMatch[1].trim();
+    raw = raw.replace(/\*/g, '%');
+    if (!raw.includes('%')) {
+      raw = raw.endsWith('.') ? `${raw}%` : `${raw}.%`;
+    }
+    return raw;
   }
 
   private actionId(): string {
