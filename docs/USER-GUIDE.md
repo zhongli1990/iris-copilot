@@ -20,6 +20,8 @@ Version 1.0 — February 2026
 10. [Modifications and Rollback](#10-modifications-and-rollback)
 11. [Lookup Table Management](#11-lookup-table-management)
 12. [FAQ](#12-faq)
+13. [E2E Validation Runbook](#13-e2e-validation-runbook)
+14. [Real-World Prompt Catalog](#14-real-world-prompt-catalog)
 
 ---
 
@@ -403,6 +405,105 @@ A: Yes. The platform is packaged as a standalone deployable. Export with `AIAgen
 
 **Q: What languages can I use?**
 A: Any language. The AI responds in the same language you use. Technical terms (HL7 fields, class names) remain in English.
+
+---
+
+## 13. E2E Validation Runbook
+
+Use this checklist to validate production-ready behavior end to end.
+
+### Pre-check (5 minutes)
+
+1. Open Chat UI in your target namespace:
+   `http://<iris-host>:52773/csp/<namespace>/AIAgent.UI.Chat.cls`
+2. Verify IRIS health:
+   `http://<iris-host>:52773/ai/health`
+3. Verify bridge health:
+   `http://localhost:3100/api/health`
+4. Verify runner availability in **Details > Runners**.
+5. Start with a clean conversation.
+
+### Step A: Read-only operations must execute directly
+
+Send:
+- "List all production items in full detail."
+- "Show queue depths for all hosts."
+- "Show recent production errors."
+
+Expected:
+- Response includes actual data, not only "fetched" summaries.
+- No approval gate for read-only calls.
+- Output is persisted in conversation history after refresh/switch.
+
+### Step B: Mutation operations must be approval-gated
+
+Send:
+- "Create a new business operation DrDoctor and wire A01/A02/A03 from PAS router."
+
+Expected:
+- Action plan returned with pending approval actions.
+- No production mutation happens yet.
+- Approval path uses action execution endpoint and then returns execution result.
+
+### Step C: Persistence and rendering
+
+1. Ask: "Hi, who are you?"
+2. Confirm assistant response renders as markdown/plain text (no raw JSON blob).
+3. Switch to another conversation and back.
+4. Confirm user + assistant messages are still present from IRIS storage.
+5. Check **Details > Raw** tab for raw stream payload visibility.
+
+### Step D: Rollback safety
+
+1. Request deployment-related operation and execute approval.
+2. Ask for versions:
+   "Show deployment versions."
+3. Rollback:
+   "Rollback to <version-id>."
+
+Expected:
+- Version history exists.
+- Rollback executes and reports outcome clearly.
+
+### Pass/Fail Criteria
+
+- Pass: read actions execute and return data; write actions require approval; history persists; rollback works.
+- Fail: empty assistant content, repeated "proceed?" loops for reads, missing persistence after session switch.
+
+---
+
+## 14. Real-World Prompt Catalog
+
+These are realistic prompts. They are not mock demo keywords; the system should interpret intent and context.
+
+### Operations and monitoring
+
+- "List all hosts in current production by name only."
+- "Show full details for all production items."
+- "Show queue depth for every host in table format."
+- "Show the last 30 production errors with source and time."
+- "Is production running, and what namespace am I in?"
+
+### Integration lifecycle
+
+- "Create a change plan to add DrDoctor as a new downstream operation for PAS A01/A02/A03."
+- "Propose required DTL mapping for DrDoctor using existing PAS fields."
+- "Generate implementation classes and show me what will be deployed."
+- "Approve deployment for generation <id>."
+- "Rollback to version <id>."
+
+### Safety/quality queries
+
+- "What exactly will change in production if I approve this?"
+- "Show compile outcomes for each generated class."
+- "Show me only failed actions and remediation steps."
+
+### Expected behavior model (important)
+
+- Prompts are interpreted by AI planners/runners and production context, not by exact hardcoded sentence matching.
+- Equivalent wording should still work (for example, "host list" vs "production items").
+- For read intents, system should execute and return data directly.
+- For mutating intents, system should present approval-required actions before execution.
 
 ---
 

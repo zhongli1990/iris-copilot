@@ -202,8 +202,28 @@ ClassMethod SendMessageSSE() As %Status
         // Stream the response from the bridge
         set sc = ##class(AIAgent.Engine.BridgeClient).SendMessageStream(conversationId, message, .fullResponse, preferredRunner)
 
-        if $$$ISOK(sc) && (fullResponse '= "") {
-            // Save the full response as an assistant message
+        // Reliability fallback: if streaming returned no content, do a non-stream
+        // bridge call and emit/persist that response so the user never gets an
+        // empty assistant message.
+        if $$$ISOK(sc) && (fullResponse = "") {
+            set fallback = ##class(AIAgent.Engine.BridgeClient).SendMessage(conversationId, message, $namespace, preferredRunner)
+            if $isobject(fallback) && (fallback.%Get("error") = "") {
+                set fallbackText = fallback.%Get("response")
+                if fallbackText '= "" {
+                    set fullResponse = fallbackText
+                    set fbData = ##class(%DynamicObject).%New()
+                    set fbData.token = fallbackText
+                    set fbData.done = 0
+                    set fbData.type = "fallback"
+                    write "data: "_fbData.%ToJSON(), !!, *-3
+                }
+            }
+        }
+
+        if $$$ISOK(sc) {
+            if fullResponse = "" {
+                set fullResponse = "(No response content returned by bridge stream)"
+            }
             do ##class(AIAgent.Model.Message).Create(conversationId, "assistant", fullResponse)
         }
 

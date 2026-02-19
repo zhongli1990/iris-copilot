@@ -17,6 +17,7 @@ import { AzureOpenAIRunner } from './runners/azure-openai/index.js';
 import { createChatRouter } from './routes/chat.js';
 import { createRunnersRouter } from './routes/runners.js';
 import { createHealthRouter } from './routes/health.js';
+import { createActionsRouter } from './routes/actions.js';
 
 // Initialize the runner registry
 const registry = new RunnerRegistry();
@@ -82,6 +83,7 @@ app.use((req, _res, next) => {
 // Routes
 app.use('/api/chat', createChatRouter(registry));
 app.use('/api/runners', createRunnersRouter(registry));
+app.use('/api/actions', createActionsRouter());
 app.use('/api', createHealthRouter(registry));
 
 // Global error handler

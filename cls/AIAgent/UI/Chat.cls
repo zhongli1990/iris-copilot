@@ -1088,7 +1088,7 @@ ClassMethod OnPage() As %Status
                             <!-- Bubble -->
                             <div class="message-bubble">
                                 <template x-if="msg.role === 'assistant'">
-                                    <div x-html="renderMarkdown(msg.content)"></div>
+                                    <div x-html="renderMarkdown(formatDisplayContent(msg.content))"></div>
                                 </template>
                                 <template x-if="msg.role !== 'assistant'">
                                     <div x-text="msg.content"></div>
@@ -1145,7 +1145,7 @@ ClassMethod OnPage() As %Status
                         <div class="message-row assistant">
                             <div class="message-avatar">IC</div>
                             <div class="message-bubble">
-                                <div x-html="renderMarkdown(streamingContent)"></div>
+                                <div x-html="renderMarkdown(formatDisplayContent(streamingContent))"></div>
                             </div>
                         </div>
                     </template>
@@ -1210,6 +1210,8 @@ ClassMethod OnPage() As %Status
                     @click="panelTab = 'production'">Production</button>
             <button class="panel-tab" :class="{ 'active': panelTab === 'runners' }"
                     @click="panelTab = 'runners'">Runners</button>
+            <button class="panel-tab" :class="{ 'active': panelTab === 'raw' }"
+                    @click="panelTab = 'raw'">Raw</button>
         </div>
 
         <div class="panel-content">
@@ -1357,6 +1359,28 @@ ClassMethod OnPage() As %Status
                 </div>
             </template>
 
+            <!-- Raw Tab -->
+            <template x-if="panelTab === 'raw'">
+                <div>
+                    <div class="status-section-title" style="margin-bottom:12px;">Raw Stream Responses</div>
+                    <template x-if="rawResponses.length === 0">
+                        <div class="review-empty" style="padding:24px;">
+                            No raw stream events captured yet.
+                        </div>
+                    </template>
+                    <template x-if="rawResponses.length !== 0">
+                        <div style="display:flex; flex-direction:column; gap:8px; max-height:58vh; overflow:auto;">
+                            <template x-for="(evt, idx) in rawResponses" :key="idx">
+                                <div style="background:#111827; color:#d1d5db; border-radius:8px; padding:8px;">
+                                    <div style="font-size:11px; color:#93c5fd; margin-bottom:4px;" x-text="evt.timestamp + '  ' + evt.kind"></div>
+                                    <pre style="margin:0; white-space:pre-wrap; font-size:11px;" x-text="evt.raw"></pre>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
         </div>
     </aside>
 
@@ -1414,6 +1438,7 @@ function chatApp() {
         isStreaming: false,
         streamingContent: '',
         eventSource: null,
+        rawResponses: [],
 
         bridgeHealthy: false,
         productionStatus: {},
@@ -1525,6 +1550,7 @@ function chatApp() {
             this.currentConversationId = id;
             this.messages = [];
             this.streamingContent = '';
+            this.rawResponses = [];
             this.generations = {};
 
             try {
@@ -1555,7 +1581,7 @@ function chatApp() {
             try {
                 const result = await this.apiFetch('/conversations', {
                     method: 'POST',
-                    body: { title: '', namespace: this.currentNamespace }
+                    body: { title: '', targetNamespace: this.currentNamespace }
                 });
                 const payload = this.unwrapApi(result) || {};
                 const conv = payload.conversation || payload;
@@ -1632,6 +1658,7 @@ function chatApp() {
 
             this.isStreaming = true;
             this.streamingContent = '';
+            this.rawResponses = [];
 
             try {
                 const streamUrl = this.getBaseUrl() + '/chat/stream';
@@ -1673,9 +1700,19 @@ function chatApp() {
                             }
                             try {
                                 const chunk = JSON.parse(jsonStr);
+                                this.captureRawResponse('sse-json', jsonStr);
 
                                 if (chunk.token) {
                                     this.streamingContent += chunk.token;
+                                    this.scrollToBottom();
+                                }
+
+                                if (chunk.response && !this.streamingContent) {
+                                    this.streamingContent += chunk.response;
+                                    this.scrollToBottom();
+                                }
+                                if (chunk.finalResponse) {
+                                    this.streamingContent = chunk.finalResponse;
                                     this.scrollToBottom();
                                 }
 
@@ -1699,23 +1736,38 @@ function chatApp() {
                                     }
                                 }
                             } catch (parseErr) {
-                                // Skip unparseable chunks
+                                this.captureRawResponse('sse-raw', jsonStr);
                             }
                         }
                     }
                 }
 
-                const finalMsg = {
-                    messageId: (assistantMsg && assistantMsg.messageId) || ('ai-' + Date.now()),
-                    conversationId: this.currentConversationId,
-                    role: 'assistant',
-                    content: this.streamingContent,
-                    timestamp: new Date().toISOString(),
-                    agentName: assistantMsg ? assistantMsg.agent : '',
-                    runnerUsed: assistantMsg ? assistantMsg.runner : (this.selectedRunner || ''),
-                    generationId: assistantMsg ? assistantMsg.generationId : ''
-                };
-                this.messages.push(finalMsg);
+                if (this.streamingContent && this.streamingContent.trim()) {
+                    const finalMsg = {
+                        messageId: (assistantMsg && assistantMsg.messageId) || ('ai-' + Date.now()),
+                        conversationId: this.currentConversationId,
+                        role: 'assistant',
+                        content: this.streamingContent,
+                        timestamp: new Date().toISOString(),
+                        agentName: assistantMsg ? assistantMsg.agent : '',
+                        runnerUsed: assistantMsg ? assistantMsg.runner : (this.selectedRunner || ''),
+                        generationId: assistantMsg ? assistantMsg.generationId : ''
+                    };
+                    this.messages.push(finalMsg);
+
+                    if (finalMsg.generationId) {
+                        this.panelTab = 'review';
+                        this.rightPanelOpen = true;
+                    }
+                } else {
+                    this.messages.push({
+                        messageId: 'sys-' + Date.now(),
+                        conversationId: this.currentConversationId,
+                        role: 'system',
+                        content: 'No response payload was returned from the stream.',
+                        timestamp: new Date().toISOString()
+                    });
+                }
 
                 if (this.currentConversation &&
                     (!this.currentConversation.title || this.currentConversation.title === 'New Conversation')) {
@@ -1724,11 +1776,6 @@ function chatApp() {
                     if (idx !== -1) {
                         this.conversations[idx].title = this.currentConversation.title;
                     }
-                }
-
-                if (finalMsg.generationId) {
-                    this.panelTab = 'review';
-                    this.rightPanelOpen = true;
                 }
 
             } catch (err) {
@@ -1743,10 +1790,34 @@ function chatApp() {
             } finally {
                 this.isStreaming = false;
                 this.streamingContent = '';
+                await this.reloadCurrentConversation();
                 this.scrollToBottom();
                 this.$nextTick(() => {
                     if (this.$refs.chatInput) this.$refs.chatInput.focus();
                 });
+            }
+        },
+
+        async reloadCurrentConversation() {
+            if (!this.currentConversationId) return;
+            try {
+                const result = await this.apiFetch('/conversations/' + this.currentConversationId);
+                const payload = this.unwrapApi(result) || {};
+                this.currentConversation = payload.conversation || payload;
+                this.messages = payload.messages || [];
+            } catch (err) {
+                console.error('Failed to reload conversation:', err);
+            }
+        },
+
+        captureRawResponse(kind, raw) {
+            this.rawResponses.push({
+                timestamp: new Date().toLocaleTimeString(),
+                kind: kind || 'raw',
+                raw: String(raw || '')
+            });
+            if (this.rawResponses.length > 200) {
+                this.rawResponses = this.rawResponses.slice(this.rawResponses.length - 200);
             }
         },
 
@@ -1914,6 +1985,20 @@ function chatApp() {
                 console.error('Markdown rendering error:', err);
             }
             return this.escapeHtml(text).replace(/\n/g, '<br>');
+        },
+
+        formatDisplayContent(text) {
+            if (!text || typeof text !== 'string') return text || '';
+            const trimmed = text.trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (parsed && typeof parsed.response === 'string' && parsed.response.trim()) {
+                        return parsed.response;
+                    }
+                } catch (e) {}
+            }
+            return text;
         },
 
         escapeHtml(text) {

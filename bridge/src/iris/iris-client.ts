@@ -69,6 +69,11 @@ export class IRISClient {
     return this.fetch(`/production/events?count=${count}`);
   }
 
+  /** Get production queue counts */
+  async getQueueCounts(): Promise<object> {
+    return this.fetch('/production/queues');
+  }
+
   /** Execute a read-only SQL query */
   async executeSQL(query: string): Promise<object> {
     return this.fetchPost('/sql', { query });
@@ -77,6 +82,40 @@ export class IRISClient {
   /** Get audit log */
   async getAuditLog(page: number = 1, pageSize: number = 50): Promise<object> {
     return this.fetch(`/audit?page=${page}&pageSize=${pageSize}`);
+  }
+
+  /** Generic request for action broker execution */
+  async request(method: 'GET' | 'POST', path: string, body?: Record<string, unknown>): Promise<object> {
+    if (method === 'GET') {
+      return this.fetch(path);
+    }
+    return this.fetchPost(path, body || {});
+  }
+
+  /** Approve and deploy a generation */
+  async approveGeneration(generationId: string): Promise<object> {
+    return this.fetchPost('/generate/approve', { generationId });
+  }
+
+  /** Reject a generation */
+  async rejectGeneration(generationId: string, reason: string = ''): Promise<object> {
+    return this.fetchPost('/generate/reject', { generationId, reason });
+  }
+
+  /** Rollback to a previous version id */
+  async rollbackVersion(versionId: string): Promise<object> {
+    return this.fetchPost(`/lifecycle/rollback/${encodeURIComponent(versionId)}`, {});
+  }
+
+  /** Start production (optional explicit name) */
+  async startProduction(productionName?: string): Promise<object> {
+    const body = productionName ? { productionName } : {};
+    return this.fetchPost('/production/start', body);
+  }
+
+  /** Stop current production */
+  async stopProduction(): Promise<object> {
+    return this.fetchPost('/production/stop', {});
   }
 
   // ---- HTTP helpers ----
