@@ -926,6 +926,9 @@ ClassMethod Operate() As %Status
                 do arr.%Push($namespace)
                 set result.data = arr
                 set meta.capability = "discover.namespaces"
+            } elseif target = "targets" {
+                set result.data = ..BuildTargetCatalog()
+                set meta.capability = "discover.targets"
             } else {
                 do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("UNSUPPORTED_TARGET", "Unsupported discover target: "_target, 400))
                 return $$$OK
@@ -949,6 +952,9 @@ ClassMethod Operate() As %Status
             } elseif target = "lookups" {
                 set result.data = ##class(AIAgent.Engine.CodeManager).ListLookupTables()
                 set meta.capability = "lookup.catalog.read"
+            } elseif target = "hl7schemas" {
+                set result.data = ##class(AIAgent.Engine.CodeManager).ListHL7Schemas()
+                set meta.capability = "hl7schemas.read"
             } elseif $extract(target,1,7) = "lookup/" {
                 set tableName = $extract(target,8,*)
                 set entries = ##class(AIAgent.Engine.CodeManager).ReadLookupTable(tableName)
@@ -986,6 +992,26 @@ ClassMethod Operate() As %Status
                 if pageSize = "" set pageSize = 20
                 set result.data = ##class(AIAgent.Engine.VersionManager).ListVersions(page, pageSize)
                 set meta.capability = "lifecycle.versions.read"
+            } elseif target = "sql/select" {
+                set query = args.%Get("query")
+                if query = "" set query = args.%Get("sql")
+                set queryTrim = $zstrip(query, "<W")
+                if queryTrim = "" {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.query' is required for target sql/select", 400))
+                    return $$$OK
+                }
+                set low = $zconvert(queryTrim, "L")
+                if $extract(low,1,6) '= "select" {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INVALID_QUERY", "Only SELECT queries are allowed for target sql/select", 400))
+                    return $$$OK
+                }
+                set sqlResult = ##class(AIAgent.Engine.CodeManager).ExecuteSQL(queryTrim)
+                if sqlResult.error '= "" {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("SQL_ERROR", sqlResult.error, 400))
+                    return $$$OK
+                }
+                set result.data = sqlResult
+                set meta.capability = "sql.read"
             } else {
                 do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("UNSUPPORTED_TARGET", "Unsupported query target: "_target, 400))
                 return $$$OK
@@ -1022,14 +1048,17 @@ ClassMethod BuildCapabilities(ns As %String = "") As %DynamicObject [ Private ]
     // Discover + query capabilities (read-first phase)
     do caps.%Push(..Cap("discover.capabilities", ns, 1))
     do caps.%Push(..Cap("discover.namespaces", ns, 1))
+    do caps.%Push(..Cap("discover.targets", ns, 1))
     do caps.%Push(..Cap("production.status.read", ns, data.ensembleAvailable))
     do caps.%Push(..Cap("production.topology.read", ns, data.ensembleAvailable))
     do caps.%Push(..Cap("production.events.read", ns, data.ensembleAvailable))
     do caps.%Push(..Cap("production.queues.read", ns, data.ensembleAvailable))
     do caps.%Push(..Cap("lookup.catalog.read", ns, 1))
     do caps.%Push(..Cap("lookup.read", ns, 1))
+    do caps.%Push(..Cap("hl7schemas.read", ns, 1))
     do caps.%Push(..Cap("class.catalog.read", ns, 1))
     do caps.%Push(..Cap("class.read", ns, 1))
+    do caps.%Push(..Cap("sql.read", ns, 1))
     do caps.%Push(..Cap("lifecycle.versions.read", ns, 1))
 
     // Reserved mutate/execute/govern capabilities (pending generic apply path)
@@ -1049,6 +1078,29 @@ ClassMethod Cap(capability As %String, ns As %String, allowed As %Integer = 1, r
     set obj.allowed = allowed
     if reason '= "" set obj.reason = reason
     return obj
+}
+
+ClassMethod BuildTargetCatalog() As %DynamicArray [ Private ]
+{
+    set arr = ##class(%DynamicArray).%New()
+    do arr.%Push("discover/capabilities")
+    do arr.%Push("discover/namespaces")
+    do arr.%Push("discover/targets")
+    do arr.%Push("query/production/status")
+    do arr.%Push("query/production/topology")
+    do arr.%Push("query/production/events")
+    do arr.%Push("query/production/queues")
+    do arr.%Push("query/lookups")
+    do arr.%Push("query/lookup/<TableName>")
+    do arr.%Push("query/hl7schemas")
+    do arr.%Push("query/classes")
+    do arr.%Push("query/class/<ClassName>")
+    do arr.%Push("query/lifecycle/versions")
+    do arr.%Push("query/sql/select")
+    do arr.%Push("mutate/* (approval-gated; pending rollout)")
+    do arr.%Push("execute/* (approval-gated; pending rollout)")
+    do arr.%Push("govern/* (approval-gated; pending rollout)")
+    return arr
 }
 
 // ---------------------------------------------------------------------------
