@@ -1016,12 +1016,139 @@ ClassMethod Operate() As %Status
                 do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("UNSUPPORTED_TARGET", "Unsupported query target: "_target, 400))
                 return $$$OK
             }
+        } elseif op = "execute" {
+            set meta.requiresApproval = 1
+            if dryRun {
+                set plan = ##class(%DynamicObject).%New()
+                set plan.status = "dry_run"
+                set plan.target = target
+                set plan.message = "Execution was not applied because dryRun=true"
+                set result.data = plan
+                set meta.capability = "execute.plan"
+            } elseif target = "generation/approve" {
+                set generationId = args.%Get("generationId")
+                if generationId = "" {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.generationId' is required for target generation/approve", 400))
+                    return $$$OK
+                }
+                set result.data = ##class(AIAgent.Engine.Orchestrator).ApproveAndDeploy(generationId)
+                set meta.capability = "execute.generation.approve"
+            } elseif target = "generation/reject" {
+                set generationId = args.%Get("generationId")
+                if generationId = "" {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.generationId' is required for target generation/reject", 400))
+                    return $$$OK
+                }
+                set reason = args.%Get("reason")
+                set sc = ##class(AIAgent.Engine.Orchestrator).RejectGeneration(generationId, reason)
+                if $$$ISERR(sc) {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+                    return $$$OK
+                }
+                set obj = ##class(%DynamicObject).%New()
+                set obj.generationId = generationId
+                set obj.status = "rejected"
+                set obj.reason = reason
+                set result.data = obj
+                set meta.capability = "execute.generation.reject"
+            } elseif target = "production/start" {
+                set productionName = args.%Get("productionName")
+                set sc = ##class(AIAgent.Engine.ProductionManager).StartProduction(productionName)
+                if $$$ISERR(sc) {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+                    return $$$OK
+                }
+                set result.data = ##class(AIAgent.Engine.ProductionManager).GetStatus()
+                set meta.capability = "execute.production.start"
+            } elseif target = "production/stop" {
+                set timeout = args.%Get("timeout")
+                if timeout = "" set timeout = 300
+                set sc = ##class(AIAgent.Engine.ProductionManager).StopProduction(timeout)
+                if $$$ISERR(sc) {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+                    return $$$OK
+                }
+                set result.data = ##class(AIAgent.Engine.ProductionManager).GetStatus()
+                set meta.capability = "execute.production.stop"
+            } elseif target = "lifecycle/rollback" {
+                set versionId = args.%Get("versionId")
+                if versionId = "" set versionId = args.%Get("id")
+                if versionId = "" {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.versionId' is required for target lifecycle/rollback", 400))
+                    return $$$OK
+                }
+                set sc = ##class(AIAgent.Engine.VersionManager).Rollback(versionId, .rollbackLog)
+                if $$$ISERR(sc) {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+                    return $$$OK
+                }
+                set obj = ##class(%DynamicObject).%New()
+                set obj.versionId = versionId
+                set obj.status = "rolled_back"
+                set obj.log = rollbackLog
+                set result.data = obj
+                set meta.capability = "execute.lifecycle.rollback"
+            } else {
+                do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("UNSUPPORTED_TARGET", "Unsupported execute target: "_target, 400))
+                return $$$OK
+            }
+        } elseif op = "mutate" {
+            set meta.requiresApproval = 1
+            if dryRun {
+                set plan = ##class(%DynamicObject).%New()
+                set plan.status = "dry_run"
+                set plan.target = target
+                set plan.message = "Mutation was not applied because dryRun=true"
+                set result.data = plan
+                set meta.capability = "mutate.plan"
+            } elseif target = "production/host/add" {
+                set hostConfig = args.%Get("config")
+                if '$isobject(hostConfig) set hostConfig = args
+                set sc = ##class(AIAgent.Engine.ProductionManager).AddBusinessHost(hostConfig)
+                if $$$ISERR(sc) {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+                    return $$$OK
+                }
+                set result.data = ##class(AIAgent.Engine.ProductionManager).GetTopology()
+                set meta.capability = "mutate.production.host.add"
+            } elseif target = "production/host/remove" {
+                set hostName = args.%Get("name")
+                if hostName = "" set hostName = args.%Get("itemName")
+                if hostName = "" {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.name' is required for target production/host/remove", 400))
+                    return $$$OK
+                }
+                set sc = ##class(AIAgent.Engine.ProductionManager).RemoveBusinessHost(hostName)
+                if $$$ISERR(sc) {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+                    return $$$OK
+                }
+                set result.data = ##class(AIAgent.Engine.ProductionManager).GetTopology()
+                set meta.capability = "mutate.production.host.remove"
+            } elseif target = "production/host/settings" {
+                set hostName = args.%Get("name")
+                if hostName = "" set hostName = args.%Get("itemName")
+                set settings = args.%Get("settings")
+                if (hostName = "") || ('$isobject(settings)) {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.name' and object 'args.settings' are required for target production/host/settings", 400))
+                    return $$$OK
+                }
+                set sc = ##class(AIAgent.Engine.ProductionManager).UpdateHostSettings(hostName, settings)
+                if $$$ISERR(sc) {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+                    return $$$OK
+                }
+                set result.data = ##class(AIAgent.Engine.ProductionManager).GetTopology()
+                set meta.capability = "mutate.production.host.settings"
+            } else {
+                do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("UNSUPPORTED_TARGET", "Unsupported mutate target: "_target, 400))
+                return $$$OK
+            }
         } else {
-            // Additive phase: mutate/execute/govern intentionally gated for now.
             set meta.requiresApproval = 1
             set result.data = ##class(%DynamicObject).%New()
             set result.data.status = "pending_implementation"
-            set result.data.message = "Operation '"_op_"' is recognized but not yet enabled in generic gateway. Use existing explicit endpoints for now."
+            set result.data.message = "Operation '"_op_"' is recognized but not yet enabled in generic gateway."
             set meta.capability = op_".pending"
         }
 
@@ -1061,9 +1188,15 @@ ClassMethod BuildCapabilities(ns As %String = "") As %DynamicObject [ Private ]
     do caps.%Push(..Cap("sql.read", ns, 1))
     do caps.%Push(..Cap("lifecycle.versions.read", ns, 1))
 
-    // Reserved mutate/execute/govern capabilities (pending generic apply path)
-    do caps.%Push(..Cap("mutate.*", ns, 0, "pending_approval_pipeline"))
-    do caps.%Push(..Cap("execute.*", ns, 0, "pending_approval_pipeline"))
+    // Generic execute/mutate capabilities (approval-gated)
+    do caps.%Push(..Cap("execute.generation.approve", ns, 1, "approval_required"))
+    do caps.%Push(..Cap("execute.generation.reject", ns, 1, "approval_required"))
+    do caps.%Push(..Cap("execute.production.start", ns, data.ensembleAvailable, "approval_required"))
+    do caps.%Push(..Cap("execute.production.stop", ns, data.ensembleAvailable, "approval_required"))
+    do caps.%Push(..Cap("execute.lifecycle.rollback", ns, 1, "approval_required"))
+    do caps.%Push(..Cap("mutate.production.host.add", ns, data.ensembleAvailable, "approval_required"))
+    do caps.%Push(..Cap("mutate.production.host.remove", ns, data.ensembleAvailable, "approval_required"))
+    do caps.%Push(..Cap("mutate.production.host.settings", ns, data.ensembleAvailable, "approval_required"))
     do caps.%Push(..Cap("govern.*", ns, 0, "pending_approval_pipeline"))
 
     set data.capabilities = caps
@@ -1097,8 +1230,14 @@ ClassMethod BuildTargetCatalog() As %DynamicArray [ Private ]
     do arr.%Push("query/class/<ClassName>")
     do arr.%Push("query/lifecycle/versions")
     do arr.%Push("query/sql/select")
-    do arr.%Push("mutate/* (approval-gated; pending rollout)")
-    do arr.%Push("execute/* (approval-gated; pending rollout)")
+    do arr.%Push("mutate/production/host/add (approval-gated)")
+    do arr.%Push("mutate/production/host/remove (approval-gated)")
+    do arr.%Push("mutate/production/host/settings (approval-gated)")
+    do arr.%Push("execute/generation/approve (approval-gated)")
+    do arr.%Push("execute/generation/reject (approval-gated)")
+    do arr.%Push("execute/production/start (approval-gated)")
+    do arr.%Push("execute/production/stop (approval-gated)")
+    do arr.%Push("execute/lifecycle/rollback (approval-gated)")
     do arr.%Push("govern/* (approval-gated; pending rollout)")
     return arr
 }

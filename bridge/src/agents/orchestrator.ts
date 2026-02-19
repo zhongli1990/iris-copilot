@@ -1003,6 +1003,9 @@ const ACTION_CATALOG: ActionCatalogEntry[] = [
   { type: 'rollback_version', op: 'execute', target: 'lifecycle/rollback', endpoint: '/lifecycle/rollback/:id', method: 'POST', requiresApproval: true, description: 'Rollback to a version snapshot' },
   { type: 'start_production', op: 'execute', target: 'production/start', endpoint: '/production/start', method: 'POST', requiresApproval: true, description: 'Start production' },
   { type: 'stop_production', op: 'execute', target: 'production/stop', endpoint: '/production/stop', method: 'POST', requiresApproval: true, description: 'Stop production' },
+  { type: 'add_production_host', op: 'mutate', target: 'production/host/add', endpoint: '/operate', method: 'POST', requiresApproval: true, description: 'Add business host to production' },
+  { type: 'remove_production_host', op: 'mutate', target: 'production/host/remove', endpoint: '/operate', method: 'POST', requiresApproval: true, description: 'Remove business host from production' },
+  { type: 'update_production_host_settings', op: 'mutate', target: 'production/host/settings', endpoint: '/operate', method: 'POST', requiresApproval: true, description: 'Update business host settings in production' },
 ];
 
 const ORCHESTRATOR_BASE_PROMPT = `You are IRIS Copilot, the AI-powered development platform for NHS hospital Trust Integration Engines.
