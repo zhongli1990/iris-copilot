@@ -75,6 +75,11 @@ export interface AppConfig {
   port: number;
   logLevel: string;
   defaultRunner: string;
+  genericOperate: {
+    enabled: boolean;
+    approvalRequiredForMutation: boolean;
+    dryRunRequired: boolean;
+  };
   anthropic: AnthropicConfig;
   openai: OpenAIConfig;
   azureOpenai: AzureOpenAIConfig;
@@ -90,6 +95,11 @@ export const config: AppConfig = {
   port: envInt("PORT", 3100),
   logLevel: env("LOG_LEVEL", "info"),
   defaultRunner: env("DEFAULT_RUNNER", "openai-codex-sdk"),
+  genericOperate: {
+    enabled: env("GENERIC_OPERATE_ENABLED", "0") === "1",
+    approvalRequiredForMutation: env("GENERIC_OPERATE_APPROVAL_REQUIRED_FOR_MUTATION", "1") === "1",
+    dryRunRequired: env("GENERIC_OPERATE_DRYRUN_REQUIRED", "1") === "1",
+  },
 
   anthropic: {
     apiKey: envRequired("ANTHROPIC_API_KEY"),
