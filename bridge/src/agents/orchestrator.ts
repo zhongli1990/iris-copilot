@@ -746,6 +746,15 @@ export class Orchestrator {
         const rows = this.extractLookupTables(data);
         return `Lookup table list read: ${rows.length} table(s).`;
       }
+      case 'hl7schemas_read': {
+        const rows = this.extractArray(data, ['items', 'schemas', 'data']);
+        return `HL7 schema catalog read: ${rows.length} schema item(s).`;
+      }
+      case 'sql_read': {
+        const d = (data || {}) as Record<string, unknown>;
+        const rowCount = Number(d.rowCount || this.extractArray(d.rows, ['rows']).length || 0);
+        return `SQL read executed: ${rowCount} row(s).`;
+      }
       default:
         return `${target || type} executed.`;
     }
@@ -814,6 +823,32 @@ export class Orchestrator {
       }
       return lines.join('\n');
     }
+    if (resolvedType === 'hl7schemas_read') {
+      const rows = this.extractArray(data, ['items', 'schemas', 'data']);
+      if (rows.length === 0) return 'No HL7 schemas were returned.';
+      const lines: string[] = [`HL7 schemas (${rows.length}):`];
+      for (const r of rows.slice(0, 300)) {
+        if (typeof r === 'string') {
+          lines.push(`- ${r}`);
+        } else {
+          const it = (r || {}) as Record<string, unknown>;
+          lines.push(`- ${String(it.name || it.schema || it.SchemaName || 'Unknown')}`);
+        }
+      }
+      return lines.join('\n');
+    }
+    if (resolvedType === 'sql_read') {
+      const d = (data || {}) as Record<string, unknown>;
+      const rows = this.extractArray(d.rows, ['rows', 'items', 'data']);
+      const rowCount = Number(d.rowCount || rows.length || 0);
+      if (rows.length === 0) return `SQL query returned ${rowCount} row(s).`;
+      const lines: string[] = [`SQL result (${rowCount} row(s)):`];
+      for (const r of rows.slice(0, 25)) {
+        lines.push(`- ${JSON.stringify(r)}`);
+      }
+      if (rows.length > 25) lines.push(`... ${rows.length - 25} more row(s) omitted.`);
+      return lines.join('\n');
+    }
     return '';
   }
 
@@ -825,6 +860,8 @@ export class Orchestrator {
     if (t === 'production/events') return 'event_log';
     if (t === 'lookups') return 'lookup_tables';
     if (t.startsWith('lookup/')) return 'lookup_read';
+    if (t === 'hl7schemas') return 'hl7schemas_read';
+    if (t === 'sql/select') return 'sql_read';
     if (type && type !== 'unknown') return type;
     return type || 'unknown';
   }
@@ -959,6 +996,8 @@ const ACTION_CATALOG: ActionCatalogEntry[] = [
   { type: 'event_log', op: 'query', target: 'production/events', endpoint: '/production/events', method: 'GET', requiresApproval: false, description: 'Read recent production events' },
   { type: 'lookup_tables', op: 'query', target: 'lookups', endpoint: '/lookups', method: 'GET', requiresApproval: false, description: 'Read lookup table catalog' },
   { type: 'lookup_read', op: 'query', target: 'lookup/ErrorCodes', endpoint: '/lookups/ErrorCodes', method: 'GET', requiresApproval: false, description: 'Read a lookup table content (set target to lookup/<TableName>)' },
+  { type: 'hl7schemas_read', op: 'query', target: 'hl7schemas', endpoint: '/hl7schemas', method: 'GET', requiresApproval: false, description: 'Read HL7 schema catalog' },
+  { type: 'sql_read', op: 'query', target: 'sql/select', endpoint: '/sql', method: 'POST', requiresApproval: false, description: 'Run read-only SQL SELECT via generic operate args.query' },
   { type: 'approve_deploy_generation', op: 'execute', target: 'generation/approve', endpoint: '/generate/approve', method: 'POST', requiresApproval: true, description: 'Approve and deploy a generated change set' },
   { type: 'reject_generation', op: 'execute', target: 'generation/reject', endpoint: '/generate/reject', method: 'POST', requiresApproval: true, description: 'Reject a generated change set' },
   { type: 'rollback_version', op: 'execute', target: 'lifecycle/rollback', endpoint: '/lifecycle/rollback/:id', method: 'POST', requiresApproval: true, description: 'Rollback to a version snapshot' },
