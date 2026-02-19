@@ -1,0 +1,25 @@
+﻿# Secrets
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# IRIS/local artifacts
+*.log
+*.bak
+*.tmp
+
+# Generated deployment exports (keep source generator, exclude generated blobs)
+deploy/AIAgent-export*.xml

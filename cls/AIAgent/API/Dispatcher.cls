@@ -1,0 +1,918 @@
+/// REST API Dispatcher for the IRIS AI Agent Platform (IRIS Copilot).
+/// Serves as the single HTTP entry point for all client interactions.
+/// Delegates to Engine classes for business logic and uses AIAgent.Util.JSON for response formatting.
+/// 
+/// Deployed as web application /ai via AIAgent.Install.Installer.
+/// 
+/// Part of the IRIS AI Agent Platform (IRIS Copilot).
+Class AIAgent.API.Dispatcher Extends %CSP.REST
+{
+
+Parameter CONTENTTYPE = "application/json";
+
+Parameter CHARSET = "utf-8";
+
+Parameter HandleCorsRequest = 1;
+
+/// URL routing map.
+XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
+{
+<Routes>
+    <!-- Chat -->
+    <Route Url="/chat" Method="POST" Call="SendMessage" />
+    <Route Url="/chat/stream" Method="POST" Call="SendMessageSSE" />
+    <Route Url="/conversations" Method="GET" Call="ListConversations" />
+    <Route Url="/conversations" Method="POST" Call="CreateConversation" />
+    <Route Url="/conversations/:id" Method="GET" Call="GetConversation" />
+    <Route Url="/conversations/:id" Method="DELETE" Call="DeleteConversation" />
+
+    <!-- Code Generation & Review -->
+    <Route Url="/generate/preview" Method="POST" Call="PreviewGeneration" />
+    <Route Url="/generate/approve" Method="POST" Call="ApproveGeneration" />
+    <Route Url="/generate/reject" Method="POST" Call="RejectGeneration" />
+
+    <!-- Production Management -->
+    <Route Url="/production/status" Method="GET" Call="GetProductionStatus" />
+    <Route Url="/production/topology" Method="GET" Call="GetProductionTopology" />
+    <Route Url="/production/start" Method="POST" Call="StartProduction" />
+    <Route Url="/production/stop" Method="POST" Call="StopProduction" />
+    <Route Url="/production/events" Method="GET" Call="GetEventLog" />
+    <Route Url="/production/queues" Method="GET" Call="GetQueueCounts" />
+
+    <!-- Code Management -->
+    <Route Url="/classes" Method="GET" Call="ListClasses" />
+    <Route Url="/classes/:className" Method="GET" Call="ReadClass" />
+    <Route Url="/lookups" Method="GET" Call="ListLookupTables" />
+    <Route Url="/lookups/:tableName" Method="GET" Call="ReadLookupTable" />
+    <Route Url="/hl7schemas" Method="GET" Call="ListHL7Schemas" />
+    <Route Url="/sql" Method="POST" Call="ExecuteSQL" />
+
+    <!-- Lifecycle -->
+    <Route Url="/lifecycle/test" Method="POST" Call="RunTests" />
+    <Route Url="/lifecycle/rollback/:id" Method="POST" Call="Rollback" />
+    <Route Url="/lifecycle/versions" Method="GET" Call="ListVersions" />
+
+    <!-- Runner Management -->
+    <Route Url="/runners" Method="GET" Call="ListRunners" />
+    <Route Url="/runners/health" Method="GET" Call="RunnerHealthCheck" />
+
+    <!-- Audit -->
+    <Route Url="/audit" Method="GET" Call="GetAuditLog" />
+
+    <!-- System -->
+    <Route Url="/health" Method="GET" Call="HealthCheck" />
+</Routes>
+}
+
+// ---------------------------------------------------------------------------
+
+// CORS Configuration
+
+// ---------------------------------------------------------------------------
+
+/// Handle CORS preflight and response headers.
+/// Allows localhost (any port) and *.nhs.uk origins.
+ClassMethod OnHandleCorsRequest(url As %String) As %Status
+{
+    set origin = %request.GetCgiEnv("HTTP_ORIGIN")
+
+    // Allow localhost on any port and any *.nhs.uk subdomain
+    set allowed = 0
+    if origin [ "://localhost" {
+        set allowed = 1
+    } elseif origin [ ".nhs.uk" {
+        // Validate it ends with .nhs.uk (prevent suffix attacks)
+        set host = $piece($piece(origin, "://", 2), "/", 1)
+        set host = $piece(host, ":", 1)
+        if ($extract(host, *-5, *) = ".nhs.uk") || (host = "nhs.uk") {
+            set allowed = 1
+        }
+    }
+
+    if allowed {
+        do %response.SetHeader("Access-Control-Allow-Origin", origin)
+    } else {
+        do %response.SetHeader("Access-Control-Allow-Origin", "")
+    }
+
+    do %response.SetHeader("Access-Control-Allow-Credentials", "true")
+    do %response.SetHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+    do %response.SetHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept")
+    do %response.SetHeader("Access-Control-Max-Age", "3600")
+
+    return $$$OK
+}
+
+// ---------------------------------------------------------------------------
+
+// Chat Endpoints
+
+// ---------------------------------------------------------------------------
+
+/// POST /chat
+/// Send a message within a conversation. Creates a new conversation if conversationId is empty.
+/// Body: {"conversationId":"...", "message":"..."}
+ClassMethod SendMessage() As %Status
+{
+    try {
+        set body = ##class(AIAgent.Util.JSON).ReadRequestJSON()
+        if '$isobject(body) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INVALID_BODY", "Request body must be valid JSON", 400))
+            return $$$OK
+        }
+
+        set message = body.%Get("message")
+        if message = "" {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'message' is required", 400))
+            return $$$OK
+        }
+        set preferredRunner = body.%Get("preferredRunner")
+
+        set conversationId = body.%Get("conversationId")
+        if conversationId = "" {
+            // Create a new conversation
+            set conv = ##class(AIAgent.Model.Conversation).Create("", $namespace)
+            if '$isobject(conv) {
+                do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("CREATE_FAILED", "Failed to create conversation", 500))
+                return $$$OK
+            }
+            set conversationId = conv.ConversationId
+        }
+
+        set result = ##class(AIAgent.Engine.Orchestrator).ProcessMessage(conversationId, message, preferredRunner)
+
+        if result.error '= "" {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("ORCHESTRATOR_ERROR", result.error, 500))
+            return $$$OK
+        }
+
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(result))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "SendMessage", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// POST /chat/stream
+/// Send a message and receive the response as Server-Sent Events (SSE).
+/// Body: {"conversationId":"...", "message":"..."}
+ClassMethod SendMessageSSE() As %Status
+{
+    try {
+        set body = ##class(AIAgent.Util.JSON).ReadRequestJSON()
+        if '$isobject(body) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INVALID_BODY", "Request body must be valid JSON", 400))
+            return $$$OK
+        }
+
+        set message = body.%Get("message")
+        if message = "" {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'message' is required", 400))
+            return $$$OK
+        }
+        set preferredRunner = body.%Get("preferredRunner")
+
+        set conversationId = body.%Get("conversationId")
+        if conversationId = "" {
+            set conv = ##class(AIAgent.Model.Conversation).Create("", $namespace)
+            if '$isobject(conv) {
+                do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("CREATE_FAILED", "Failed to create conversation", 500))
+                return $$$OK
+            }
+            set conversationId = conv.ConversationId
+        }
+
+        // Set SSE response headers
+        set %response.ContentType = "text/event-stream"
+        set %response.CharSet = "utf-8"
+        do %response.SetHeader("Cache-Control", "no-cache")
+        do %response.SetHeader("Connection", "keep-alive")
+        do %response.SetHeader("X-Accel-Buffering", "no")
+
+        // Save the user message first
+        set userMsg = ##class(AIAgent.Model.Message).Create(conversationId, "user", message)
+
+        // Send conversationId as first event
+        set initData = ##class(%DynamicObject).%New()
+        set initData.conversationId = conversationId
+        set initData.type = "init"
+        write "data: "_initData.%ToJSON(), !!, *-3
+
+        // Stream the response from the bridge
+        set sc = ##class(AIAgent.Engine.BridgeClient).SendMessageStream(conversationId, message, .fullResponse, preferredRunner)
+
+        if $$$ISOK(sc) && (fullResponse '= "") {
+            // Save the full response as an assistant message
+            do ##class(AIAgent.Model.Message).Create(conversationId, "assistant", fullResponse)
+        }
+
+        // Send done event
+        set doneData = ##class(%DynamicObject).%New()
+        set doneData.type = "done"
+        set doneData.conversationId = conversationId
+        write "data: "_doneData.%ToJSON(), !!, *-3
+
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "SendMessageSSE", ex.DisplayString())
+        set errData = ##class(%DynamicObject).%New()
+        set errData.type = "error"
+        set errData.message = ex.DisplayString()
+        try {
+            write "data: "_errData.%ToJSON(), !!, *-3
+        } catch {}
+    }
+    return $$$OK
+}
+
+/// GET /conversations
+/// List conversations with optional pagination and status filter.
+/// Query params: page (default 1), pageSize (default 20), status (optional)
+ClassMethod ListConversations() As %Status
+{
+    try {
+        set page = ##class(AIAgent.Util.JSON).GetIntParam("page", 1)
+        set pageSize = ##class(AIAgent.Util.JSON).GetIntParam("pageSize", 20)
+        set status = ##class(AIAgent.Util.JSON).GetParam("status")
+
+        set result = ##class(AIAgent.Model.Conversation).List(page, pageSize, status)
+        do ##class(AIAgent.Util.JSON).WriteJSON(result)
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "ListConversations", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// POST /conversations
+/// Create a new conversation.
+/// Body: {"title":"...", "targetNamespace":"..."}
+ClassMethod CreateConversation() As %Status
+{
+    try {
+        set body = ##class(AIAgent.Util.JSON).ReadRequestJSON()
+        set title = ""
+        set targetNs = ""
+        if $isobject(body) {
+            set title = body.%Get("title")
+            set targetNs = body.%Get("targetNamespace")
+        }
+
+        set conv = ##class(AIAgent.Model.Conversation).Create(title, targetNs)
+        if '$isobject(conv) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("CREATE_FAILED", "Failed to create conversation", 500))
+            return $$$OK
+        }
+
+        set %response.Status = "201 Created"
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(conv.ToJSON()))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "CreateConversation", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// GET /conversations/:id
+/// Get a conversation with its messages.
+ClassMethod GetConversation(id As %String) As %Status
+{
+    try {
+        set conv = ##class(AIAgent.Model.Conversation).FindById(id)
+        if '$isobject(conv) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("NOT_FOUND", "Conversation '"_id_"' not found", 404))
+            return $$$OK
+        }
+
+        set data = conv.ToJSON()
+        // Include messages
+        set data.messages = ##class(AIAgent.Model.Message).GetByConversation(id)
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "GetConversation", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// DELETE /conversations/:id
+/// Delete (archive) a conversation.
+ClassMethod DeleteConversation(id As %String) As %Status
+{
+    try {
+        set conv = ##class(AIAgent.Model.Conversation).FindById(id)
+        if '$isobject(conv) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("NOT_FOUND", "Conversation '"_id_"' not found", 404))
+            return $$$OK
+        }
+
+        // Soft-delete by archiving
+        set conv.Status = "archived"
+        set sc = conv.%Save()
+        if $$$ISERR(sc) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+            return $$$OK
+        }
+
+        do ##class(AIAgent.Model.AuditEntry).LogSuccess("delete", "conversation:"_id)
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(conv.ToJSON()))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "DeleteConversation", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+// ---------------------------------------------------------------------------
+
+// Code Generation & Review Endpoints
+
+// ---------------------------------------------------------------------------
+
+/// POST /generate/preview
+/// Preview a generation without deploying. Delegates to the Orchestrator.
+/// Body: {"conversationId":"...", "message":"..."}
+ClassMethod PreviewGeneration() As %Status
+{
+    try {
+        set body = ##class(AIAgent.Util.JSON).ReadRequestJSON()
+        if '$isobject(body) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INVALID_BODY", "Request body must be valid JSON", 400))
+            return $$$OK
+        }
+
+        set conversationId = body.%Get("conversationId")
+        set message = body.%Get("message")
+        if message = "" {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'message' is required", 400))
+            return $$$OK
+        }
+
+        if conversationId = "" {
+            set conv = ##class(AIAgent.Model.Conversation).Create("Code Generation", $namespace)
+            if '$isobject(conv) {
+                do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("CREATE_FAILED", "Failed to create conversation", 500))
+                return $$$OK
+            }
+            set conversationId = conv.ConversationId
+        }
+
+        // ProcessMessage will return the generation in preview status
+        set result = ##class(AIAgent.Engine.Orchestrator).ProcessMessage(conversationId, message)
+
+        if result.error '= "" {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("GENERATION_ERROR", result.error, 500))
+            return $$$OK
+        }
+
+        // If a generation was created, include its details
+        if result.generationId '= "" {
+            set gen = ##class(AIAgent.Model.Generation).FindById(result.generationId)
+            if $isobject(gen) {
+                set result.generation = gen.ToJSON()
+            }
+        }
+
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(result))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "PreviewGeneration", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// POST /generate/approve
+/// Approve a generation and deploy it (compile classes, update production).
+/// Body: {"generationId":"..."}
+ClassMethod ApproveGeneration() As %Status
+{
+    try {
+        set body = ##class(AIAgent.Util.JSON).ReadRequestJSON()
+        if '$isobject(body) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INVALID_BODY", "Request body must be valid JSON", 400))
+            return $$$OK
+        }
+
+        set generationId = body.%Get("generationId")
+        if generationId = "" {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'generationId' is required", 400))
+            return $$$OK
+        }
+
+        set result = ##class(AIAgent.Engine.Orchestrator).ApproveAndDeploy(generationId)
+
+        if result.error '= "" {
+            set httpStatus = $select(result.error [ "not found":404, result.error [ "expected":409, 1:500)
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("APPROVAL_ERROR", result.error, httpStatus))
+            return $$$OK
+        }
+
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(result))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "ApproveGeneration", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// POST /generate/reject
+/// Reject a generation (do not deploy).
+/// Body: {"generationId":"...", "reason":"..."}
+ClassMethod RejectGeneration() As %Status
+{
+    try {
+        set body = ##class(AIAgent.Util.JSON).ReadRequestJSON()
+        if '$isobject(body) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INVALID_BODY", "Request body must be valid JSON", 400))
+            return $$$OK
+        }
+
+        set generationId = body.%Get("generationId")
+        if generationId = "" {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'generationId' is required", 400))
+            return $$$OK
+        }
+
+        set reason = body.%Get("reason")
+        set sc = ##class(AIAgent.Engine.Orchestrator).RejectGeneration(generationId, reason)
+
+        if $$$ISERR(sc) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc, 404))
+            return $$$OK
+        }
+
+        set data = ##class(%DynamicObject).%New()
+        set data.generationId = generationId
+        set data.status = "rejected"
+        set data.reason = reason
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "RejectGeneration", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+// ---------------------------------------------------------------------------
+
+// Production Management Endpoints
+
+// ---------------------------------------------------------------------------
+
+/// GET /production/status
+/// Get current production name, status, and namespace.
+ClassMethod GetProductionStatus() As %Status
+{
+    try {
+        set data = ##class(AIAgent.Engine.ProductionManager).GetStatus()
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "GetProductionStatus", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// GET /production/topology
+/// Get full production topology: all business hosts with their configurations.
+ClassMethod GetProductionTopology() As %Status
+{
+    try {
+        set data = ##class(AIAgent.Engine.ProductionManager).GetTopology()
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "GetProductionTopology", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// POST /production/start
+/// Start the production.
+/// Body (optional): {"productionName":"..."}
+ClassMethod StartProduction() As %Status
+{
+    try {
+        set body = ##class(AIAgent.Util.JSON).ReadRequestJSON()
+        set productionName = ""
+        if $isobject(body) {
+            set productionName = body.%Get("productionName")
+        }
+
+        set sc = ##class(AIAgent.Engine.ProductionManager).StartProduction(productionName)
+
+        if $$$ISERR(sc) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+            return $$$OK
+        }
+
+        // Return fresh status after starting
+        set data = ##class(AIAgent.Engine.ProductionManager).GetStatus()
+        set data.action = "started"
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "StartProduction", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// POST /production/stop
+/// Stop the production.
+/// Body (optional): {"timeout": 300}
+ClassMethod StopProduction() As %Status
+{
+    try {
+        set body = ##class(AIAgent.Util.JSON).ReadRequestJSON()
+        set timeout = 300
+        if $isobject(body) && (body.%Get("timeout") '= "") {
+            set timeout = +body.%Get("timeout")
+        }
+
+        set sc = ##class(AIAgent.Engine.ProductionManager).StopProduction(timeout)
+
+        if $$$ISERR(sc) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+            return $$$OK
+        }
+
+        set data = ##class(AIAgent.Engine.ProductionManager).GetStatus()
+        set data.action = "stopped"
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "StopProduction", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// GET /production/events
+/// Get recent event log entries.
+/// Query params: count (default 50), configName (optional)
+ClassMethod GetEventLog() As %Status
+{
+    try {
+        set count = ##class(AIAgent.Util.JSON).GetIntParam("count", 50)
+        set configName = ##class(AIAgent.Util.JSON).GetParam("configName")
+
+        set data = ##class(AIAgent.Engine.ProductionManager).GetEventLog(count, configName)
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "GetEventLog", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// GET /production/queues
+/// Get message queue depths for all hosts.
+ClassMethod GetQueueCounts() As %Status
+{
+    try {
+        set data = ##class(AIAgent.Engine.ProductionManager).GetQueueCounts()
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "GetQueueCounts", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+// ---------------------------------------------------------------------------
+
+// Code Management Endpoints
+
+// ---------------------------------------------------------------------------
+
+/// GET /classes
+/// List classes matching a pattern.
+/// Query params: pattern (default "AIAgent.Generated.%")
+ClassMethod ListClasses() As %Status
+{
+    try {
+        set pattern = ##class(AIAgent.Util.JSON).GetParam("pattern", "AIAgent.Generated.%")
+
+        set data = ##class(AIAgent.Engine.CodeManager).ListClasses(pattern)
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "ListClasses", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// GET /classes/:className
+/// Read the full source of a class.
+ClassMethod ReadClass(className As %String) As %Status
+{
+    try {
+        // URL-decode the class name (dots may be encoded as %2E)
+        set className = $zconvert(className, "I", "URL")
+
+        if '##class(AIAgent.Engine.CodeManager).ClassExists(className) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("NOT_FOUND", "Class '"_className_"' not found", 404))
+            return $$$OK
+        }
+
+        set sc = ##class(AIAgent.Engine.CodeManager).ReadClass(className, .source)
+        if $$$ISERR(sc) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+            return $$$OK
+        }
+
+        set data = ##class(%DynamicObject).%New()
+        set data.className = className
+        set data.source = source
+        set data.exists = 1
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "ReadClass", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// GET /lookups
+/// List all lookup tables and their entry counts.
+ClassMethod ListLookupTables() As %Status
+{
+    try {
+        set data = ##class(AIAgent.Engine.CodeManager).ListLookupTables()
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "ListLookupTables", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// GET /lookups/:tableName
+/// Read entries from a specific lookup table.
+ClassMethod ReadLookupTable(tableName As %String) As %Status
+{
+    try {
+        set tableName = $zconvert(tableName, "I", "URL")
+
+        set data = ##class(AIAgent.Engine.CodeManager).ReadLookupTable(tableName)
+        set result = ##class(%DynamicObject).%New()
+        set result.tableName = tableName
+        set result.entries = data
+        set result.entryCount = data.%Size()
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(result))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "ReadLookupTable", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// GET /hl7schemas
+/// List all HL7 schemas (standard and custom).
+ClassMethod ListHL7Schemas() As %Status
+{
+    try {
+        set data = ##class(AIAgent.Engine.CodeManager).ListHL7Schemas()
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "ListHL7Schemas", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// POST /sql
+/// Execute a read-only SQL query and return results.
+/// Body: {"query":"SELECT ..."}
+ClassMethod ExecuteSQL() As %Status
+{
+    try {
+        set body = ##class(AIAgent.Util.JSON).ReadRequestJSON()
+        if '$isobject(body) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INVALID_BODY", "Request body must be valid JSON", 400))
+            return $$$OK
+        }
+
+        set query = body.%Get("query")
+        if query = "" {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'query' is required", 400))
+            return $$$OK
+        }
+
+        set result = ##class(AIAgent.Engine.CodeManager).ExecuteSQL(query)
+
+        if result.error '= "" {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("SQL_ERROR", result.error, 400))
+            return $$$OK
+        }
+
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(result))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "ExecuteSQL", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+// ---------------------------------------------------------------------------
+
+// Lifecycle Endpoints
+
+// ---------------------------------------------------------------------------
+
+/// POST /lifecycle/test
+/// Run unit tests for a class or pattern.
+/// Body: {"testClass":"...", "pattern":"..."}
+/// If testClass is provided, runs a single test class.
+/// If pattern is provided, runs all matching test classes.
+ClassMethod RunTests() As %Status
+{
+    try {
+        set body = ##class(AIAgent.Util.JSON).ReadRequestJSON()
+        if '$isobject(body) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INVALID_BODY", "Request body must be valid JSON", 400))
+            return $$$OK
+        }
+
+        set testClass = body.%Get("testClass")
+        set pattern = body.%Get("pattern")
+
+        if (testClass = "") && (pattern = "") {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'testClass' or 'pattern' is required", 400))
+            return $$$OK
+        }
+
+        if testClass '= "" {
+            // Run a single test class
+            set result = ##class(AIAgent.Engine.TestRunner).RunTestClass(testClass)
+        } else {
+            // Run a test suite matching the pattern
+            set result = ##class(AIAgent.Engine.TestRunner).RunTestSuite(pattern)
+        }
+
+        if result.error '= "" {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("TEST_ERROR", result.error, 400))
+            return $$$OK
+        }
+
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(result))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "RunTests", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// POST /lifecycle/rollback/:id
+/// Rollback to a specific version snapshot.
+ClassMethod Rollback(id As %String) As %Status
+{
+    try {
+        set id = $zconvert(id, "I", "URL")
+
+        set sc = ##class(AIAgent.Engine.VersionManager).Rollback(id, .log)
+
+        if $$$ISERR(sc) {
+            set errMsg = $system.Status.GetOneErrorText(sc)
+            set httpStatus = $select(errMsg [ "not found":404, errMsg [ "empty":400, 1:500)
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("ROLLBACK_ERROR", errMsg, httpStatus))
+            return $$$OK
+        }
+
+        set data = ##class(%DynamicObject).%New()
+        set data.versionId = id
+        set data.status = "rolled_back"
+        set data.log = log
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "Rollback", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// GET /lifecycle/versions
+/// List version snapshots.
+/// Query params: page (default 1), pageSize (default 20)
+ClassMethod ListVersions() As %Status
+{
+    try {
+        set page = ##class(AIAgent.Util.JSON).GetIntParam("page", 1)
+        set pageSize = ##class(AIAgent.Util.JSON).GetIntParam("pageSize", 20)
+
+        set data = ##class(AIAgent.Engine.VersionManager).ListVersions(page, pageSize)
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "ListVersions", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+// ---------------------------------------------------------------------------
+
+// Runner Management Endpoints
+
+// ---------------------------------------------------------------------------
+
+/// GET /runners
+/// List available AI runners from the bridge.
+ClassMethod ListRunners() As %Status
+{
+    try {
+        set data = ##class(AIAgent.Engine.BridgeClient).ListRunners()
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "ListRunners", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// GET /runners/health
+/// Check connectivity and health of the AI runner bridge.
+ClassMethod RunnerHealthCheck() As %Status
+{
+    try {
+        set data = ##class(AIAgent.Engine.BridgeClient).HealthCheck()
+        if 'data.healthy {
+            set %response.Status = "503 Service Unavailable"
+        }
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "RunnerHealthCheck", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+// ---------------------------------------------------------------------------
+
+// Audit Endpoints
+
+// ---------------------------------------------------------------------------
+
+/// GET /audit
+/// Get audit log entries with optional filters.
+/// Query params: action, actor, page (default 1), pageSize (default 50)
+ClassMethod GetAuditLog() As %Status
+{
+    try {
+        set action = ##class(AIAgent.Util.JSON).GetParam("action")
+        set actor = ##class(AIAgent.Util.JSON).GetParam("actor")
+        set page = ##class(AIAgent.Util.JSON).GetIntParam("page", 1)
+        set pageSize = ##class(AIAgent.Util.JSON).GetIntParam("pageSize", 50)
+
+        set data = ##class(AIAgent.Model.AuditEntry).Query(action, actor, page, pageSize)
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "GetAuditLog", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+// ---------------------------------------------------------------------------
+
+// System Endpoints
+
+// ---------------------------------------------------------------------------
+
+/// GET /health
+/// Health check endpoint. Returns platform version, IRIS version, namespace, and uptime info.
+ClassMethod HealthCheck() As %Status
+{
+    try {
+        set data = ##class(%DynamicObject).%New()
+        set data.status = "healthy"
+        set data.platform = "IRIS AI Agent Platform"
+        set data.version = "1.0.0"
+        set data.irisVersion = $system.Version.GetNumber()
+        set data.irisProduct = $system.Version.GetProduct()
+        set data.namespace = $namespace
+        set data.timestamp = ##class(AIAgent.Util.JSON).Now()
+        set data.username = $username
+
+        // Check if Ensemble/HealthConnect is available
+        set data.ensembleAvailable = ##class(%Dictionary.CompiledClass).%ExistsId("Ens.Director")
+
+        // Check bridge connectivity
+        set bridgeHealth = ##class(AIAgent.Engine.BridgeClient).HealthCheck()
+        set data.bridgeHealthy = bridgeHealth.healthy
+        set data.bridgeUrl = ##class(AIAgent.Engine.BridgeClient).GetBridgeURL()
+
+        // Production status (only if Ensemble is available)
+        if data.ensembleAvailable {
+            set prodStatus = ##class(AIAgent.Engine.ProductionManager).GetStatus()
+            set data.productionName = prodStatus.productionName
+            set data.productionStatus = prodStatus.statusText
+        }
+
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        // Even health check errors should return a structured response
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("HEALTH_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+}
