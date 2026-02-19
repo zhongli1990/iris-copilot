@@ -55,6 +55,8 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
     <!-- Runner Management -->
     <Route Url="/runners" Method="GET" Call="ListRunners" />
     <Route Url="/runners/health" Method="GET" Call="RunnerHealthCheck" />
+    <Route Url="/capabilities" Method="GET" Call="GetCapabilities" />
+    <Route Url="/operate" Method="POST" Call="Operate" />
 
     <!-- Audit -->
     <Route Url="/audit" Method="GET" Call="GetAuditLog" />
@@ -863,6 +865,190 @@ ClassMethod RunnerHealthCheck() As %Status
         do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
     }
     return $$$OK
+}
+
+/// GET /capabilities
+/// Return effective generic capabilities for the current user and namespace.
+/// Query params: namespace (optional, defaults to current)
+ClassMethod GetCapabilities() As %Status
+{
+    try {
+        set ns = ##class(AIAgent.Util.JSON).GetParam("namespace", $namespace)
+        set data = ..BuildCapabilities(ns)
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(data))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "GetCapabilities", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// POST /operate
+/// Generic operation gateway (additive path).
+/// Body: {"namespace":"...","op":"discover|query|mutate|execute|govern","target":"...","action":"...","args":{},"dryRun":true|false}
+ClassMethod Operate() As %Status
+{
+    try {
+        set body = ##class(AIAgent.Util.JSON).ReadRequestJSON()
+        if '$isobject(body) {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INVALID_BODY", "Request body must be valid JSON", 400))
+            return $$$OK
+        }
+
+        set op = body.%Get("op")
+        set target = body.%Get("target")
+        if (op = "") || (target = "") {
+            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'op' and 'target' are required", 400))
+            return $$$OK
+        }
+
+        set ns = body.%Get("namespace")
+        if ns = "" set ns = $namespace
+        set action = body.%Get("action")
+        set dryRun = +body.%Get("dryRun")
+        set args = body.%Get("args")
+        if '$isobject(args) {
+            set args = ##class(%DynamicObject).%New()
+        }
+
+        set result = ##class(%DynamicObject).%New()
+        set meta = ##class(%DynamicObject).%New()
+        set meta.namespace = ns
+        set meta.executedBy = $username
+        set meta.requiresApproval = 0
+
+        if op = "discover" {
+            if target = "capabilities" {
+                set result.data = ..BuildCapabilities(ns)
+                set meta.capability = "discover.capabilities"
+            } elseif target = "namespaces" {
+                set arr = ##class(%DynamicArray).%New()
+                do arr.%Push($namespace)
+                set result.data = arr
+                set meta.capability = "discover.namespaces"
+            } else {
+                do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("UNSUPPORTED_TARGET", "Unsupported discover target: "_target, 400))
+                return $$$OK
+            }
+        } elseif op = "query" {
+            if target = "production/status" {
+                set result.data = ##class(AIAgent.Engine.ProductionManager).GetStatus()
+                set meta.capability = "production.status.read"
+            } elseif target = "production/topology" {
+                set result.data = ##class(AIAgent.Engine.ProductionManager).GetTopology()
+                set meta.capability = "production.topology.read"
+            } elseif target = "production/events" {
+                set count = args.%Get("count")
+                if count = "" set count = 50
+                set cfg = args.%Get("configName")
+                set result.data = ##class(AIAgent.Engine.ProductionManager).GetEventLog(count, cfg)
+                set meta.capability = "production.events.read"
+            } elseif target = "production/queues" {
+                set result.data = ##class(AIAgent.Engine.ProductionManager).GetQueueCounts()
+                set meta.capability = "production.queues.read"
+            } elseif target = "lookups" {
+                set result.data = ##class(AIAgent.Engine.CodeManager).ListLookupTables()
+                set meta.capability = "lookup.catalog.read"
+            } elseif $extract(target,1,7) = "lookup/" {
+                set tableName = $extract(target,8,*)
+                set entries = ##class(AIAgent.Engine.CodeManager).ReadLookupTable(tableName)
+                set obj = ##class(%DynamicObject).%New()
+                set obj.tableName = tableName
+                set obj.entries = entries
+                set obj.entryCount = entries.%Size()
+                set result.data = obj
+                set meta.capability = "lookup.read"
+            } elseif target = "classes" {
+                set pattern = args.%Get("pattern")
+                if pattern = "" set pattern = "AIAgent.Generated.%"
+                set result.data = ##class(AIAgent.Engine.CodeManager).ListClasses(pattern)
+                set meta.capability = "class.catalog.read"
+            } elseif $extract(target,1,6) = "class/" {
+                set className = $extract(target,7,*)
+                if '##class(AIAgent.Engine.CodeManager).ClassExists(className) {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("NOT_FOUND", "Class '"_className_"' not found", 404))
+                    return $$$OK
+                }
+                set sc = ##class(AIAgent.Engine.CodeManager).ReadClass(className, .source)
+                if $$$ISERR(sc) {
+                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+                    return $$$OK
+                }
+                set obj = ##class(%DynamicObject).%New()
+                set obj.className = className
+                set obj.source = source
+                set result.data = obj
+                set meta.capability = "class.read"
+            } elseif target = "lifecycle/versions" {
+                set page = args.%Get("page")
+                if page = "" set page = 1
+                set pageSize = args.%Get("pageSize")
+                if pageSize = "" set pageSize = 20
+                set result.data = ##class(AIAgent.Engine.VersionManager).ListVersions(page, pageSize)
+                set meta.capability = "lifecycle.versions.read"
+            } else {
+                do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("UNSUPPORTED_TARGET", "Unsupported query target: "_target, 400))
+                return $$$OK
+            }
+        } else {
+            // Additive phase: mutate/execute/govern intentionally gated for now.
+            set meta.requiresApproval = 1
+            set result.data = ##class(%DynamicObject).%New()
+            set result.data.status = "pending_implementation"
+            set result.data.message = "Operation '"_op_"' is recognized but not yet enabled in generic gateway. Use existing explicit endpoints for now."
+            set meta.capability = op_".pending"
+        }
+
+        set result.meta = meta
+        set result.dryRun = dryRun
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).SuccessResponse(result))
+    } catch ex {
+        do ##class(AIAgent.Util.Logger).Error("Dispatcher", "Operate", ex.DisplayString())
+        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("INTERNAL_ERROR", ex.DisplayString(), 500))
+    }
+    return $$$OK
+}
+
+/// Build effective capabilities for current user/session.
+ClassMethod BuildCapabilities(ns As %String = "") As %DynamicObject [ Private ]
+{
+    set data = ##class(%DynamicObject).%New()
+    if ns = "" set ns = $namespace
+    set data.namespace = ns
+    set data.username = $username
+    set data.ensembleAvailable = ##class(%Dictionary.CompiledClass).%ExistsId("Ens.Director")
+    set caps = ##class(%DynamicArray).%New()
+
+    // Discover + query capabilities (read-first phase)
+    do caps.%Push(..Cap("discover.capabilities", ns, 1))
+    do caps.%Push(..Cap("discover.namespaces", ns, 1))
+    do caps.%Push(..Cap("production.status.read", ns, data.ensembleAvailable))
+    do caps.%Push(..Cap("production.topology.read", ns, data.ensembleAvailable))
+    do caps.%Push(..Cap("production.events.read", ns, data.ensembleAvailable))
+    do caps.%Push(..Cap("production.queues.read", ns, data.ensembleAvailable))
+    do caps.%Push(..Cap("lookup.catalog.read", ns, 1))
+    do caps.%Push(..Cap("lookup.read", ns, 1))
+    do caps.%Push(..Cap("class.catalog.read", ns, 1))
+    do caps.%Push(..Cap("class.read", ns, 1))
+    do caps.%Push(..Cap("lifecycle.versions.read", ns, 1))
+
+    // Reserved mutate/execute/govern capabilities (pending generic apply path)
+    do caps.%Push(..Cap("mutate.*", ns, 0, "pending_approval_pipeline"))
+    do caps.%Push(..Cap("execute.*", ns, 0, "pending_approval_pipeline"))
+    do caps.%Push(..Cap("govern.*", ns, 0, "pending_approval_pipeline"))
+
+    set data.capabilities = caps
+    return data
+}
+
+ClassMethod Cap(capability As %String, ns As %String, allowed As %Integer = 1, reason As %String = "") As %DynamicObject [ Private ]
+{
+    set obj = ##class(%DynamicObject).%New()
+    set obj.capability = capability
+    set obj.namespace = ns
+    set obj.allowed = allowed
+    if reason '= "" set obj.reason = reason
+    return obj
 }
 
 // ---------------------------------------------------------------------------
