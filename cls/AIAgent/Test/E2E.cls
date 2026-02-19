@@ -1,6 +1,6 @@
 /// IRIS-side E2E probes for generic gateway and bridge APIs.
 /// Run from IRIS terminal:
-///   do ##class(AIAgent.Test.E2E).Run()
+/// do ##class(AIAgent.Test.E2E).Run()
 Class AIAgent.Test.E2E [ Abstract ]
 {
 
