@@ -38,6 +38,8 @@ export interface ChatOutput {
 export interface ActionProposal {
   id: string;
   type: string;
+  op?: 'discover' | 'query' | 'mutate' | 'execute' | 'govern';
+  target?: string;
   summary: string;
   requiresApproval: boolean;
   status: 'executed' | 'pending-approval';
@@ -48,6 +50,8 @@ export interface ActionProposal {
 
 interface ActionCatalogEntry {
   type: string;
+  op?: 'discover' | 'query' | 'mutate' | 'execute' | 'govern';
+  target?: string;
   endpoint: string;
   method: 'GET' | 'POST';
   requiresApproval: boolean;
@@ -189,7 +193,7 @@ export class Orchestrator {
       const plannerRequest: RunnerChatRequest = {
         message: this.buildPlannerUserPrompt(input),
         history: [],
-        systemPrompt: this.buildPlannerSystemPrompt(intent, input),
+        systemPrompt: await this.buildPlannerSystemPrompt(intent, input),
       };
       const raw = await runner.chat(plannerRequest);
       const parsed = this.parsePlannerDecision(raw.content);
@@ -210,7 +214,20 @@ export class Orchestrator {
         }
         if (action.method === 'GET' && action.endpoint) {
           try {
-            const data = this.unwrapData(await this.irisClient.request('GET', action.endpoint));
+            let data: unknown;
+            if (config.genericOperate.enabled && action.op === 'query' && action.target) {
+              const opResult = await this.irisClient.operate({
+                namespace: input.namespace,
+                op: 'query',
+                target: action.target,
+                action: 'read',
+                args: action.payload || {},
+                dryRun: false,
+              });
+              data = this.unwrapData(opResult);
+            } else {
+              data = this.unwrapData(await this.irisClient.request('GET', action.endpoint));
+            }
             action.status = 'executed';
             executedCount++;
             const summary = this.summarizeReadResult(action.type, data);
@@ -603,13 +620,22 @@ export class Orchestrator {
     return [];
   }
 
-  private buildPlannerSystemPrompt(intent: Intent, input: ChatInput): string {
+  private async buildPlannerSystemPrompt(intent: Intent, input: ChatInput): Promise<string> {
+    let capabilities = '';
+    if (config.genericOperate.enabled) {
+      try {
+        const cap = await this.irisClient.getCapabilities(input.namespace);
+        capabilities = JSON.stringify(this.unwrapData(cap));
+      } catch {
+        capabilities = '';
+      }
+    }
     return [
       'You are IRIS Copilot action planner.',
       'Decide whether to respond conversationally or output executable action proposals.',
       'Return ONLY JSON. No markdown, no prose outside JSON.',
       'JSON schema:',
-      '{"mode":"respond|actions","response":"string","actions":[{"id":"string","type":"string","summary":"string","requiresApproval":true|false,"endpoint":"/path","method":"GET|POST","payload":{}}]}',
+      '{"mode":"respond|actions","response":"string","actions":[{"id":"string","type":"string","op":"discover|query|mutate|execute|govern","target":"string","summary":"string","requiresApproval":true|false,"endpoint":"/path","method":"GET|POST","payload":{}}]}',
       'Rules:',
       '- Use actions only when the user asks for real environment operations.',
       '- For read-only queries, propose GET actions with requiresApproval=false and return the requested data directly.',
@@ -618,6 +644,7 @@ export class Orchestrator {
       '- Only use endpoints from the provided action catalog.',
       `Intent: ${intent}`,
       `Namespace: ${input.namespace}`,
+      capabilities ? `Capabilities: ${capabilities}` : '',
       `Action catalog: ${JSON.stringify(ACTION_CATALOG)}`,
     ].join('\n');
   }
@@ -670,6 +697,8 @@ export class Orchestrator {
       normalized.push({
         id: a.id || this.actionId(),
         type: entry.type,
+        op: a.op || entry.op,
+        target: a.target || entry.target,
         summary: a.summary || entry.description,
         requiresApproval: entry.requiresApproval,
         status: entry.requiresApproval ? 'pending-approval' : 'executed',
@@ -756,6 +785,18 @@ export class Orchestrator {
       if (rows.length === 0) return 'No lookup tables were returned.';
       const lines: string[] = [`Lookup tables (${rows.length}):`];
       for (const t of rows) lines.push(`- ${t}`);
+      return lines.join('\n');
+    }
+    if (type === 'lookup_read') {
+      const d = (data || {}) as Record<string, unknown>;
+      const tableName = String(d.tableName || 'Unknown');
+      const entries = this.extractArray(d.entries, ['items']);
+      if (entries.length === 0) return `Lookup table ${tableName} has no entries.`;
+      const lines: string[] = [`Lookup table ${tableName} entries (${entries.length}):`];
+      for (const e of entries.slice(0, 300)) {
+        const it = (e || {}) as Record<string, unknown>;
+        lines.push(`- ${String(it.name || it.key || it.Name || '')} => ${String(it.value || it.Value || '')}`);
+      }
       return lines.join('\n');
     }
     return '';
@@ -885,16 +926,17 @@ export class Orchestrator {
 // ============================================================
 
 const ACTION_CATALOG: ActionCatalogEntry[] = [
-  { type: 'production_status', endpoint: '/production/status', method: 'GET', requiresApproval: false, description: 'Read live production status' },
-  { type: 'production_topology', endpoint: '/production/topology', method: 'GET', requiresApproval: false, description: 'Read current production topology and items' },
-  { type: 'queue_counts', endpoint: '/production/queues', method: 'GET', requiresApproval: false, description: 'Read live queue counts' },
-  { type: 'event_log', endpoint: '/production/events', method: 'GET', requiresApproval: false, description: 'Read recent production events' },
-  { type: 'lookup_tables', endpoint: '/lookups', method: 'GET', requiresApproval: false, description: 'Read lookup table catalog' },
-  { type: 'approve_deploy_generation', endpoint: '/generate/approve', method: 'POST', requiresApproval: true, description: 'Approve and deploy a generated change set' },
-  { type: 'reject_generation', endpoint: '/generate/reject', method: 'POST', requiresApproval: true, description: 'Reject a generated change set' },
-  { type: 'rollback_version', endpoint: '/lifecycle/rollback/:id', method: 'POST', requiresApproval: true, description: 'Rollback to a version snapshot' },
-  { type: 'start_production', endpoint: '/production/start', method: 'POST', requiresApproval: true, description: 'Start production' },
-  { type: 'stop_production', endpoint: '/production/stop', method: 'POST', requiresApproval: true, description: 'Stop production' },
+  { type: 'production_status', op: 'query', target: 'production/status', endpoint: '/production/status', method: 'GET', requiresApproval: false, description: 'Read live production status' },
+  { type: 'production_topology', op: 'query', target: 'production/topology', endpoint: '/production/topology', method: 'GET', requiresApproval: false, description: 'Read current production topology and items' },
+  { type: 'queue_counts', op: 'query', target: 'production/queues', endpoint: '/production/queues', method: 'GET', requiresApproval: false, description: 'Read live queue counts' },
+  { type: 'event_log', op: 'query', target: 'production/events', endpoint: '/production/events', method: 'GET', requiresApproval: false, description: 'Read recent production events' },
+  { type: 'lookup_tables', op: 'query', target: 'lookups', endpoint: '/lookups', method: 'GET', requiresApproval: false, description: 'Read lookup table catalog' },
+  { type: 'lookup_read', op: 'query', target: 'lookup/ErrorCodes', endpoint: '/lookups/ErrorCodes', method: 'GET', requiresApproval: false, description: 'Read a lookup table content (set target to lookup/<TableName>)' },
+  { type: 'approve_deploy_generation', op: 'execute', target: 'generation/approve', endpoint: '/generate/approve', method: 'POST', requiresApproval: true, description: 'Approve and deploy a generated change set' },
+  { type: 'reject_generation', op: 'execute', target: 'generation/reject', endpoint: '/generate/reject', method: 'POST', requiresApproval: true, description: 'Reject a generated change set' },
+  { type: 'rollback_version', op: 'execute', target: 'lifecycle/rollback', endpoint: '/lifecycle/rollback/:id', method: 'POST', requiresApproval: true, description: 'Rollback to a version snapshot' },
+  { type: 'start_production', op: 'execute', target: 'production/start', endpoint: '/production/start', method: 'POST', requiresApproval: true, description: 'Start production' },
+  { type: 'stop_production', op: 'execute', target: 'production/stop', endpoint: '/production/stop', method: 'POST', requiresApproval: true, description: 'Stop production' },
 ];
 
 const ORCHESTRATOR_BASE_PROMPT = `You are IRIS Copilot, the AI-powered development platform for NHS hospital Trust Integration Engines.
