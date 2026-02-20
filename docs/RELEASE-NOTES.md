@@ -1,5 +1,34 @@
 ﻿# Release Notes
 
+## v0.1.5 - 2026-02-20
+
+### Summary
+Quality hardening and reporting release: production host mutation reliability fixes, orchestrator action-quality improvements, new packaged XML export (`v31`), and full human-readable real-world query/outcome reporting.
+
+### Changes
+- IRIS production mutation reliability:
+  - Fixed host settings update path in `AIAgent.Engine.ProductionManager` to avoid invalid direct `Ens.Config.Item.Settings` assignment at runtime.
+  - Added safer per-setting application helpers and aligned mutation behavior for add/update flows.
+- Orchestrator quality improvements:
+  - Improved multi-entity name extraction for add/update/remove operations.
+  - Added rollback target auto-resolution to latest available lifecycle snapshot when ID is omitted.
+  - Added graceful no-pending-generation handling for approve/reject requests.
+  - Improved triage response structure for recent-event failure analysis prompts.
+- Packaging:
+  - Generated new import package `deploy/AIAgent-export-v31.xml` (local artifact for import/retest).
+- Evaluation and reporting:
+  - Refreshed machine artifacts:
+    - `tests/realworld-e2e-last-report.json`
+    - `tests/realworld-e2e-judge-report.json`
+  - Added human-readable full results:
+    - `docs/REALWORLD-TEST-RESULTS.md`
+  - Updated executive report:
+    - `docs/REALWORLD-EVAL-REPORT.md`
+
+### Validation
+- Bridge build passed: `npm.cmd run build`
+- Realworld harness run passed: `npm.cmd run e2e:realworld` with 37/37 harness pass.
+- Judge strict scoring remains tracked for semantic/runtime edges in `tests/realworld-e2e-judge-report.json`.
 ## v0.1.3 - 2026-02-20
 
 ### Summary
@@ -112,5 +141,6 @@ Stability and capability release for real-world IRIS Copilot operation: model-dr
 - Bridge TypeScript build passes (`npm run build`).
 - Versioned IRIS export packages regenerated through v17.
 - Manual E2E validation guidance included in `docs/USER-GUIDE.md` for operators.
+
 
 
