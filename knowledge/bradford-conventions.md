@@ -1,7 +1,7 @@
-# Bradford TIE Conventions for AI Agents
+﻿# Site TIE Conventions for AI Agents
 
 This document describes the specific patterns, naming conventions, and architecture
-of the NHS Bradford Teaching Hospitals Trust Integration Engine (TIE).
+of the NHS Site Teaching Hospitals Trust Integration Engine (TIE).
 
 ## 1. Production
 
@@ -72,22 +72,22 @@ Production host names (the Name in Ens.Config.Item) follow these patterns:
 
 ## 5. Routing Architecture
 
-The Bradford TIE uses a tiered routing architecture:
+The Site TIE uses a tiered routing architecture:
 
 ```
 Inbound Service
-    ↓
+    â†“
 Sequence Manager (optional, for IPM)
-    ↓
+    â†“
 System Distributor (first-level router)
-    ├→ Domain Router 1 (e.g., "RTADT Router")
-    ├→ Domain Router 2 (e.g., "Waba Router")
-    ├→ Domain Router 3 (e.g., "Unisoft Router")
-    ├→ Canonical Router (normalizes for multi-target)
-    └→ Specialty Router (e.g., "Cardiology Router")
-         ↓
+    â”œâ†’ Domain Router 1 (e.g., "RTADT Router")
+    â”œâ†’ Domain Router 2 (e.g., "Waba Router")
+    â”œâ†’ Domain Router 3 (e.g., "Unisoft Router")
+    â”œâ†’ Canonical Router (normalizes for multi-target)
+    â””â†’ Specialty Router (e.g., "Cardiology Router")
+         â†“
     Transform (DTL)
-         ↓
+         â†“
     Outbound Operation
 ```
 
@@ -109,8 +109,8 @@ Error file paths typically follow: `C:\TEST\<System>\Errors\`
 
 ### Canonical Normalization
 Messages from different sources are normalized through `BRI.Interfaces.Canonical`:
-- `Canonical.Processes.checkID` — validates/enriches identifiers
-- `Canonical.Processes.DeceasedMessageProcess` — handles deceased flag logic
+- `Canonical.Processes.checkID` â€” validates/enriches identifiers
+- `Canonical.Processes.DeceasedMessageProcess` â€” handles deceased flag logic
 - Canonical transforms normalize field mappings
 
 ### YHCR/FHIR Integration
@@ -121,7 +121,7 @@ Regional health data exchange uses:
 
 ## 7. Important Notes for Code Generation
 
-1. **Always use parameterized SQL** (`?` placeholders) — never concatenate values into SQL
+1. **Always use parameterized SQL** (`?` placeholders) â€” never concatenate values into SQL
 2. **Always handle errors** with try/catch and return `%Status`
 3. **Use SETTINGS parameter** for configurable values (ports, paths, endpoints)
 4. **Use Lookup Tables** for reference data that changes without code deployment
@@ -129,5 +129,6 @@ Regional health data exchange uses:
 6. **Log significant events** through the Ensemble Event Log
 7. **Follow the BRI package hierarchy** for new interfaces
 8. **Test with synthetic HL7 messages** using `EnsLib.HL7.Message` and `SetValueAt()`
-9. **Bradford Trust MRN** is in PID:3(1).1 — it's called "BTHFT MRN"
+9. **Site Trust MRN** is in PID:3(1).1 â€” it's called "BTHFT MRN"
 10. **HL7 schemas in use:** 2.3, 2.3.1, 2.4, CERNER2.3, custom schemas
+

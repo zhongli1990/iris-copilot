@@ -105,7 +105,7 @@ Health checks:
 
 ## Repository Notes
 
-- This repo is standalone under `Bradford/AIAgent`
+- This repo is standalone under `Site/AIAgent`
 - Secrets are excluded via `.gitignore` (`.env`, build artifacts, generated export XML)
 
 ## License
@@ -114,3 +114,4 @@ This project is licensed under the **MIT License**.
 See `LICENSE` for the full license text.
 
 Copyright (c) Lightweight Integration Limited.
+

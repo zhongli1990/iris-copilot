@@ -1,4 +1,4 @@
-# Test Case Specification — IRIS AI Agent Platform
+﻿# Test Case Specification â€” IRIS AI Agent Platform
 
 **Date:** 2026-02-17
 **Covers:** Platform infrastructure tests + Demo scenario (Pharmacy Dose-Check) tests
@@ -27,7 +27,7 @@
 | **Expected** | `{"status": "ok", "iris": true, "bridge": true, "runners": {"claude-agent-sdk": "healthy", ...}}` |
 | **Pass Criteria** | HTTP 200, all components report healthy |
 
-### TC-INFRA-003: Runner Registry — List Runners
+### TC-INFRA-003: Runner Registry â€” List Runners
 
 | Field | Value |
 |-------|-------|
@@ -36,7 +36,7 @@
 | **Expected** | JSON array of registered runners with id, name, enabled, capabilities, health status |
 | **Pass Criteria** | At least 1 runner enabled, capabilities include "chat" and "code-generation" |
 
-### TC-INFRA-004: Runner Health Check — Individual
+### TC-INFRA-004: Runner Health Check â€” Individual
 
 | Field | Value |
 |-------|-------|
@@ -77,17 +77,17 @@
 
 ## 2. IRIS Engine Tests
 
-### TC-ENGINE-001: CodeManager — Write and Compile Class
+### TC-ENGINE-001: CodeManager â€” Write and Compile Class
 
 | Field | Value |
 |-------|-------|
 | **ID** | TC-ENGINE-001 |
-| **Steps** | 1. Call `CodeManager.WriteClass("Bradford.AIGenerated.Test.HelloWorld", <valid COS source>)` 2. Call `CodeManager.CompileClass("Bradford.AIGenerated.Test.HelloWorld")` |
+| **Steps** | 1. Call `CodeManager.WriteClass("Site.AIGenerated.Test.HelloWorld", <valid COS source>)` 2. Call `CodeManager.CompileClass("Site.AIGenerated.Test.HelloWorld")` |
 | **Expected** | Class compiled successfully, no errors |
-| **Pass Criteria** | `$SYSTEM.OBJ.IsValidClassname("Bradford.AIGenerated.Test.HelloWorld")` returns 1 |
+| **Pass Criteria** | `$SYSTEM.OBJ.IsValidClassname("Site.AIGenerated.Test.HelloWorld")` returns 1 |
 | **Cleanup** | Delete test class after |
 
-### TC-ENGINE-002: CodeManager — Compile Error Handling
+### TC-ENGINE-002: CodeManager â€” Compile Error Handling
 
 | Field | Value |
 |-------|-------|
@@ -96,7 +96,7 @@
 | **Expected** | Compilation fails, errors returned with line numbers and descriptions |
 | **Pass Criteria** | Status is error, error string is non-empty and meaningful |
 
-### TC-ENGINE-003: ProductionManager — Get Topology
+### TC-ENGINE-003: ProductionManager â€” Get Topology
 
 | Field | Value |
 |-------|-------|
@@ -105,7 +105,7 @@
 | **Expected** | Returns JSON with all 150+ hosts from BRI.Productions.TEST |
 | **Pass Criteria** | JSON contains known hosts: "From Cerner ADT", "Cerner Distributor", "AScribe Pharmacy Router" |
 
-### TC-ENGINE-004: ProductionManager — Add and Remove Business Host
+### TC-ENGINE-004: ProductionManager â€” Add and Remove Business Host
 
 | Field | Value |
 |-------|-------|
@@ -114,7 +114,7 @@
 | **Expected** | Host added, visible, removed, gone |
 | **Pass Criteria** | Production config updated correctly at each step |
 
-### TC-ENGINE-005: VersionManager — Snapshot and Rollback
+### TC-ENGINE-005: VersionManager â€” Snapshot and Rollback
 
 | Field | Value |
 |-------|-------|
@@ -123,7 +123,7 @@
 | **Expected** | Class source matches original (pre-modification) state |
 | **Pass Criteria** | Rollback restores exact byte-for-byte class source |
 
-### TC-ENGINE-006: TestRunner — Execute Unit Tests
+### TC-ENGINE-006: TestRunner â€” Execute Unit Tests
 
 | Field | Value |
 |-------|-------|
@@ -136,7 +136,7 @@
 
 ## 3. AI Agent Tests
 
-### TC-AGENT-001: Orchestrator — Intent Classification
+### TC-AGENT-001: Orchestrator â€” Intent Classification
 
 | Field | Value |
 |-------|-------|
@@ -150,7 +150,7 @@
 | **Expected 3** | Intent: ROLLBACK |
 | **Pass Criteria** | Correct intent for all 3 inputs |
 
-### TC-AGENT-002: Orchestrator — Clarifying Questions
+### TC-AGENT-002: Orchestrator â€” Clarifying Questions
 
 | Field | Value |
 |-------|-------|
@@ -159,7 +159,7 @@
 | **Expected** | Orchestrator asks: source system? target system? HL7 message type? |
 | **Pass Criteria** | Response contains at least 2 clarifying questions |
 
-### TC-AGENT-003: Architect — Topology Design
+### TC-AGENT-003: Architect â€” Topology Design
 
 | Field | Value |
 |-------|-------|
@@ -169,7 +169,7 @@
 | **Expected** | Design includes: 1 BP, 2 BO, 1 message class, 1 lookup table, 1 routing rule change |
 | **Pass Criteria** | All required component types present, correct adapter types specified |
 
-### TC-AGENT-004: Developer — ObjectScript Generation Quality
+### TC-AGENT-004: Developer â€” ObjectScript Generation Quality
 
 | Field | Value |
 |-------|-------|
@@ -178,16 +178,16 @@
 | **Expected** | Valid ObjectScript that: extends correct superclass, has proper BPL XML, references correct HL7 paths, uses Ens.Util.FunctionSet.Lookup() |
 | **Pass Criteria** | Class compiles with zero errors on first attempt |
 
-### TC-AGENT-005: Developer — Follows Bradford Conventions
+### TC-AGENT-005: Developer â€” Follows Site Conventions
 
 | Field | Value |
 |-------|-------|
 | **ID** | TC-AGENT-005 |
 | **Steps** | Inspect generated class names and structure |
-| **Expected** | Classes use `Bradford.AIGenerated.*` prefix, follow IRIS naming conventions (no underscores in class names, proper package nesting), include documentation comments |
+| **Expected** | Classes use `Site.AIGenerated.*` prefix, follow IRIS naming conventions (no underscores in class names, proper package nesting), include documentation comments |
 | **Pass Criteria** | All classes follow convention checklist |
 
-### TC-AGENT-006: Reviewer — Catches Defects
+### TC-AGENT-006: Reviewer â€” Catches Defects
 
 | Field | Value |
 |-------|-------|
@@ -196,7 +196,7 @@
 | **Expected** | Reviewer identifies specific issues with line references and suggested fixes |
 | **Pass Criteria** | At least 1 real defect identified per flawed submission |
 
-### TC-AGENT-007: Runner Swap — Same Result from Different Runner
+### TC-AGENT-007: Runner Swap â€” Same Result from Different Runner
 
 | Field | Value |
 |-------|-------|
@@ -209,7 +209,7 @@
 
 ## 4. Demo Scenario Tests (Pharmacy Dose-Check)
 
-### TC-DEMO-001: End-to-End — Dose Exceeds Maximum
+### TC-DEMO-001: End-to-End â€” Dose Exceeds Maximum
 
 | Field | Value |
 |-------|-------|
@@ -218,25 +218,25 @@
 | **Steps** | 1. Inject synthetic RDE^O11 with drug=AMOX500, dose=5000 into "From Cerner Orders" |
 | **Expected** | - DoseCheckProcess extracts drug code and dose |
 |  | - Lookup finds AMOX500 max=3000 |
-|  | - 5000 > 3000 → alert triggered |
-|  | - Email sent to pharmsafety@bradfordhospitals.nhs.uk |
+|  | - 5000 > 3000 â†’ alert triggered |
+|  | - Email sent to pharmsafety@Sitehospitals.nhs.uk |
 |  | - Log line written to DoseAlerts_YYYYMMDD.log |
 |  | - Original RDE^O11 also forwarded to AScribe (unchanged) |
 | **Pass Criteria** | Email received, log file contains alert line, AScribe receives unmodified order |
 
-### TC-DEMO-002: End-to-End — Dose Within Safe Range
+### TC-DEMO-002: End-to-End â€” Dose Within Safe Range
 
 | Field | Value |
 |-------|-------|
 | **ID** | TC-DEMO-002 |
 | **Steps** | Inject RDE^O11 with drug=PARA500, dose=2000 (max=4000) |
 | **Expected** | - Lookup finds PARA500 max=4000 |
-|  | - 2000 <= 4000 → no alert |
+|  | - 2000 <= 4000 â†’ no alert |
 |  | - No email sent, no log line written |
 |  | - Original order forwarded to AScribe |
 | **Pass Criteria** | No alert generated, AScribe receives order |
 
-### TC-DEMO-003: End-to-End — Drug Not in Lookup Table
+### TC-DEMO-003: End-to-End â€” Drug Not in Lookup Table
 
 | Field | Value |
 |-------|-------|
@@ -253,8 +253,8 @@
 | Field | Value |
 |-------|-------|
 | **ID** | TC-DEMO-004 |
-| **Steps** | 1. Add new entry to PharmDoseLimit: "NEWDRUG1" → 500 (via Management Portal) 2. Inject RDE^O11 with drug=NEWDRUG1, dose=1000 |
-| **Expected** | Alert triggered for NEWDRUG1 (1000 > 500) — without any code changes or restarts |
+| **Steps** | 1. Add new entry to PharmDoseLimit: "NEWDRUG1" â†’ 500 (via Management Portal) 2. Inject RDE^O11 with drug=NEWDRUG1, dose=1000 |
+| **Expected** | Alert triggered for NEWDRUG1 (1000 > 500) â€” without any code changes or restarts |
 | **Pass Criteria** | New drug checked correctly using updated lookup table |
 
 ### TC-DEMO-005: Existing Pharmacy Route Unaffected
@@ -357,8 +357,8 @@
 |-------|-------|
 | **ID** | TC-SEC-005 |
 | **Steps** | Complete full demo lifecycle, then query audit entries |
-| **Expected** | Every action logged: generate, compile, deploy, test, rollback — with timestamp, actor, target, status |
-| **Pass Criteria** | No gaps in audit trail — every state change has a corresponding entry |
+| **Expected** | Every action logged: generate, compile, deploy, test, rollback â€” with timestamp, actor, target, status |
+| **Pass Criteria** | No gaps in audit trail â€” every state change has a corresponding entry |
 
 ---
 
@@ -367,7 +367,7 @@
 | Component | Requirement |
 |-----------|-------------|
 | IRIS Instance | InterSystems IRIS for Health 2024.1+ or HealthConnect 2024.1+ |
-| Namespace | Bradford TIE namespace with `BRI.Productions.TEST` loaded |
+| Namespace | Site TIE namespace with `BRI.Productions.TEST` loaded |
 | Node.js | v20 LTS or v24+ (with compatibility patches if needed) |
 | AI API Keys | At least 1 runner configured (Claude Agent SDK or OpenAI Codex) |
 | Email | SMTP access to NHS Mail relay (or test SMTP server for testing) |
@@ -377,3 +377,4 @@
 ---
 
 *End of Test Cases Document.*
+

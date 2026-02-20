@@ -1,6 +1,6 @@
-# HL7 v2 Message Schemas Reference for AI Agents
+﻿# HL7 v2 Message Schemas Reference for AI Agents
 
-## 1. Common Message Types in Bradford TIE
+## 1. Common Message Types in Site TIE
 
 ### ADT (Admit/Discharge/Transfer)
 | Event | Name | Trigger |
@@ -119,7 +119,7 @@ TXA  Transcription Document Header
 ### PID (Patient Identification)
 | Field | ID | Description |
 |-------|-----|-------------|
-| Patient ID (MRN) | PID:3(1).1 | BTHFT MRN in Bradford |
+| Patient ID (MRN) | PID:3(1).1 | BTHFT MRN in Site |
 | Patient Name - Family | PID:5.1 | Last name |
 | Patient Name - Given | PID:5.2 | First name |
 | Date of Birth | PID:7 | TS format |
@@ -175,17 +175,17 @@ Segment:Field.Component.SubComponent
 Segment:Field(Repeat).Component
 
 Examples:
-  MSH:9.1          → Message type (e.g., "ADT")
-  MSH:9.2          → Trigger event (e.g., "A01")
-  PID:3(1).1       → First patient ID, first component (MRN)
-  PID:3(2).1       → Second patient ID (often NHS Number)
-  PID:5.1          → Family name
-  PID:5.2          → Given name
-  OBX:5            → Observation value
-  OBR:4.1          → Universal service ID code
-  RXE:2.1          → Drug code identifier
-  RXE:2.2          → Drug name
-  RXE:3            → Give amount (dose)
+  MSH:9.1          â†’ Message type (e.g., "ADT")
+  MSH:9.2          â†’ Trigger event (e.g., "A01")
+  PID:3(1).1       â†’ First patient ID, first component (MRN)
+  PID:3(2).1       â†’ Second patient ID (often NHS Number)
+  PID:5.1          â†’ Family name
+  PID:5.2          â†’ Given name
+  OBX:5            â†’ Observation value
+  OBR:4.1          â†’ Universal service ID code
+  RXE:2.1          â†’ Drug code identifier
+  RXE:2.2          â†’ Drug name
+  RXE:3            â†’ Give amount (dose)
 ```
 
 ## 4. Document Types (DocType)
@@ -215,3 +215,4 @@ MSA-1 Acknowledgment Code:
   AE = Application Error
   AR = Application Reject
 ```
+

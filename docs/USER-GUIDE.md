@@ -1,8 +1,8 @@
-# IRIS Copilot — User Guide
+﻿# IRIS Copilot â€” User Guide
 
 **IRIS AI Agent Platform for NHS Trust Integration Engines**
 
-Version 1.0 — February 2026
+Version 1.0 â€” February 2026
 
 ---
 
@@ -27,7 +27,7 @@ Version 1.0 — February 2026
 
 ## 1. What is IRIS Copilot?
 
-IRIS Copilot is an AI-powered platform that lets you build, modify, monitor, and manage clinical system integrations on InterSystems IRIS HealthConnect — using plain English (or Spanish, Chinese, or any language).
+IRIS Copilot is an AI-powered platform that lets you build, modify, monitor, and manage clinical system integrations on InterSystems IRIS HealthConnect â€” using plain English (or Spanish, Chinese, or any language).
 
 **You describe what you need. The AI designs, generates, tests, and deploys it.**
 
@@ -46,8 +46,8 @@ No ObjectScript coding required. No specialist IRIS developers needed for routin
 
 - Deploy code without explicit human approval
 - Modify production systems without a version snapshot (rollback point)
-- Access patient data — it works with message structures, not message content
-- Replace clinical judgement — it builds what you specify, you verify it's correct
+- Access patient data â€” it works with message structures, not message content
+- Replace clinical judgement â€” it builds what you specify, you verify it's correct
 
 ---
 
@@ -109,7 +109,7 @@ Type your requirement in plain English. Be as specific as you can about:
 - **Any conditions** (e.g., "only if the dose exceeds a safe maximum")
 
 **Example:**
-> "When Cerner sends pharmacy orders, check if the dose exceeds the safe maximum from a lookup table. If it does, email pharmsafety@bradfordhospitals.nhs.uk with the patient MRN, drug name, dose, and safe max. Also log it to a file for audit."
+> "When Cerner sends pharmacy orders, check if the dose exceeds the safe maximum from a lookup table. If it does, email pharmsafety@Sitehospitals.nhs.uk with the patient MRN, drug name, dose, and safe max. Also log it to a file for audit."
 
 ### Step 2: Answer Clarifying Questions
 
@@ -119,7 +119,7 @@ The AI will ask targeted questions to fill in technical details:
 - Which existing system routes should be preserved?
 - Where should log files be saved?
 
-**You can answer in plain English.** If you're unsure about a technical detail, say so — the AI will suggest sensible defaults based on the existing Bradford TIE configuration.
+**You can answer in plain English.** If you're unsure about a technical detail, say so â€” the AI will suggest sensible defaults based on the existing Site TIE configuration.
 
 ### Step 3: Review the Design
 
@@ -184,7 +184,7 @@ When the AI generates code, it appears in the **Code Review Panel** (right side)
 After approval, the platform automatically:
 
 1. Creates a version snapshot (rollback point)
-2. Compiles all classes — you'll see compile status for each
+2. Compiles all classes â€” you'll see compile status for each
 3. Loads any lookup tables
 4. Adds new hosts to the running production
 5. Updates the production live (no restart required)
@@ -223,7 +223,7 @@ AI responses stream in real-time token by token. You'll see a typing indicator w
 
 ### Conversation History
 
-All conversations are saved and can be resumed later. Use the sidebar to switch between conversations. Each conversation maintains its own context — the AI remembers previous messages in the same conversation.
+All conversations are saved and can be resumed later. Use the sidebar to switch between conversations. Each conversation maintains its own context â€” the AI remembers previous messages in the same conversation.
 
 ### Language Support
 
@@ -231,7 +231,7 @@ Type in any language. The AI responds in the same language you use:
 
 - English: "Create an ADT router for BadgerNet"
 - Spanish: "Crea un enrutador ADT para BadgerNet"
-- Chinese: "为BadgerNet创建ADT路由器"
+- Chinese: "ä¸ºBadgerNetåˆ›å»ºADTè·¯ç”±å™¨"
 
 Technical terms (HL7 fields, class names, IRIS APIs) remain in English regardless of conversation language.
 
@@ -267,7 +267,7 @@ Platform creates version snapshot, compiles, adds hosts to production, runs test
 
 ### Phase 7: Monitor (ongoing)
 
-Ask "How is the pharmacy dose check running?" — get live stats on messages processed, alerts triggered, errors.
+Ask "How is the pharmacy dose check running?" â€” get live stats on messages processed, alerts triggered, errors.
 
 ### Phase 8: Modify or Rollback (as needed)
 
@@ -296,11 +296,11 @@ Each generated class has a type that maps to an IRIS HealthConnect component:
 ### Approval Workflow
 
 ```
-Generate → Preview → Human Review → Approve → Compile → Test → Deploy
+Generate â†’ Preview â†’ Human Review â†’ Approve â†’ Compile â†’ Test â†’ Deploy
                          |
-                         ├── Edit (modify inline)
-                         ├── Reject (discard with reason)
-                         └── Regenerate (ask AI to try again)
+                         â”œâ”€â”€ Edit (modify inline)
+                         â”œâ”€â”€ Reject (discard with reason)
+                         â””â”€â”€ Regenerate (ask AI to try again)
 ```
 
 Every action is logged in the audit trail. Nothing is deployed without your explicit approval.
@@ -326,7 +326,7 @@ Every action is logged in the audit trail. Nothing is deployed without your expl
 | Running | Production is active, all enabled hosts operational |
 | Stopped | Production is not running |
 | Suspended | Production paused, queued messages waiting |
-| Troubled | One or more hosts have errors — investigate |
+| Troubled | One or more hosts have errors â€” investigate |
 
 ---
 
@@ -336,9 +336,9 @@ Every action is logged in the audit trail. Nothing is deployed without your expl
 
 Just describe the change in the same conversation:
 
-> "Add a second email recipient — icunurse@bradfordhospitals.nhs.uk — but only for Warfarin alerts"
+> "Add a second email recipient â€” icunurse@Sitehospitals.nhs.uk â€” but only for Warfarin alerts"
 
-The AI shows a **diff** — only the changed sections are highlighted. Same review/approve workflow applies.
+The AI shows a **diff** â€” only the changed sections are highlighted. Same review/approve workflow applies.
 
 ### Rollback
 
@@ -379,17 +379,17 @@ Lookup tables store reference data that changes without code changes (e.g., drug
 2. Navigate to: Interoperability > Lookup Tables
 3. Select the table name
 4. Add, edit, or remove entries
-5. Changes take effect immediately — no recompilation needed
+5. Changes take effect immediately â€” no recompilation needed
 
 ---
 
 ## 12. FAQ
 
 **Q: Can the AI access patient data?**
-A: No. The AI works with message *structures* (HL7 field paths, class definitions, routing rules) — not message *content*. Patient data stays within the IRIS server and is never sent to external AI services.
+A: No. The AI works with message *structures* (HL7 field paths, class definitions, routing rules) â€” not message *content*. Patient data stays within the IRIS server and is never sent to external AI services.
 
 **Q: What happens if the AI generates incorrect code?**
-A: Nothing — until you approve it. The human review step is mandatory. Generated code is shown in preview mode and only compiled after explicit approval.
+A: Nothing â€” until you approve it. The human review step is mandatory. Generated code is shown in preview mode and only compiled after explicit approval.
 
 **Q: Can I undo a deployment?**
 A: Yes, instantly. Every deployment creates a version snapshot. Say "Roll back to the previous version" and it's restored in seconds.
@@ -398,7 +398,7 @@ A: Yes, instantly. Every deployment creates a version snapshot. Say "Roll back t
 A: Rephrase or provide more detail. The AI will ask clarifying questions. You can also reference existing components by name: "Do the same thing as the Cerner ADT router but for WinPath lab results."
 
 **Q: Which AI providers are supported?**
-A: Claude (Anthropic), GPT-4o (OpenAI), and Azure OpenAI are ready. Google Vertex AI and local Ollama are planned. Providers are plug-and-play — the system uses whichever is configured.
+A: Claude (Anthropic), GPT-4o (OpenAI), and Azure OpenAI are ready. Google Vertex AI and local Ollama are planned. Providers are plug-and-play â€” the system uses whichever is configured.
 
 **Q: Can I use this on a different IRIS instance?**
 A: Yes. The platform is packaged as a standalone deployable. Export with `AIAgent.Install.Installer.ExportPackage()` and import on any IRIS HealthConnect instance.
@@ -511,3 +511,4 @@ These are realistic prompts. They are not mock demo keywords; the system should 
 *End of User Guide. For deployment instructions, see [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md).*
 *For the full demo scenario, see [DEMO-LIFECYCLE.md](DEMO-LIFECYCLE.md).*
 *For test specifications, see [TEST-CASES.md](TEST-CASES.md).*
+
