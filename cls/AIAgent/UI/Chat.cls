@@ -1055,21 +1055,21 @@ ClassMethod OnPage() As %Status
                     <h1>OpenLI IRIS CoPilot</h1>
                     <p>AI-powered assistant for building and managing InterSystems IRIS interoperability productions. Ask me to create services, processes, operations, transforms, and more.</p>
                     <div class="welcome-suggestions">
-                        <div class="suggestion-card" @click="useSuggestion('Create an HL7 ADT inbound service that reads from a TCP port and routes by message type')">
-                            <strong>HL7 Inbound Service</strong>
-                            Create a TCP listener for HL7 ADT messages with routing rules
+                        <div class="suggestion-card" @click="useSuggestion('List all production hosts with full details.')">
+                            <strong>Production Topology</strong>
+                            List all hosts with class, category, and enabled state
                         </div>
-                        <div class="suggestion-card" @click="useSuggestion('Build a REST operation that sends patient data to an external FHIR server')">
-                            <strong>FHIR REST Operation</strong>
-                            Build an outbound operation for FHIR API integration
+                        <div class="suggestion-card" @click="useSuggestion('Show queue depth for all hosts.')">
+                            <strong>Queue Depth</strong>
+                            Show queue counts across production hosts
                         </div>
-                        <div class="suggestion-card" @click="useSuggestion('Create a business process that validates prescription doses against a drug database lookup table')">
-                            <strong>Dose Check Process</strong>
-                            Validate prescriptions against a drug database
+                        <div class="suggestion-card" @click="useSuggestion('Show recent production events.')">
+                            <strong>Recent Events</strong>
+                            Review latest production event log entries
                         </div>
-                        <div class="suggestion-card" @click="useSuggestion('Show me the current production status and list all configured business hosts')">
-                            <strong>Production Status</strong>
-                            Check the current interoperability production
+                        <div class="suggestion-card" @click="useSuggestion('Show lookup table ErrorCodes content.')">
+                            <strong>Lookup Content</strong>
+                            Read live lookup table values from IRIS
                         </div>
                     </div>
                 </div>
@@ -1473,12 +1473,14 @@ function chatApp() {
             this.currentNamespace = this.getNamespaceFromUrl();
             this.userInitials = this.getUserInitials();
             try { this.selectedRunner = localStorage.getItem('aiagent.selectedRunner') || ''; } catch (e) {}
+            this.currentConversationId = this.getStoredConversationId();
 
             await Promise.allSettled([
                 this.loadConversations(),
                 this.checkHealth(),
                 this.refreshRunners()
             ]);
+            await this.restoreConversationAfterRefresh();
 
             // Periodic health check (30 minutes to reduce runner probe traffic)
             setInterval(() => { this.checkHealth(); }, 1800000);
@@ -1533,21 +1535,50 @@ function chatApp() {
             return result;
         },
 
+        getStoredConversationId() {
+            try { return localStorage.getItem('aiagent.currentConversationId') || ''; } catch (e) {}
+            return '';
+        },
+
+        storeConversationId(id) {
+            try {
+                if (id) localStorage.setItem('aiagent.currentConversationId', id);
+                else localStorage.removeItem('aiagent.currentConversationId');
+            } catch (e) {}
+        },
+
         // ----- Conversations -----
         async loadConversations() {
             try {
                 const result = await this.apiFetch('/conversations');
                 const payload = this.unwrapApi(result);
-                this.conversations = Array.isArray(payload) ? payload : [];
+                if (Array.isArray(payload)) {
+                    this.conversations = payload;
+                } else if (payload && Array.isArray(payload.data)) {
+                    this.conversations = payload.data;
+                } else {
+                    this.conversations = [];
+                }
             } catch (err) {
                 console.error('Failed to load conversations:', err);
                 this.conversations = [];
             }
         },
 
+        async restoreConversationAfterRefresh() {
+            if (!Array.isArray(this.conversations) || this.conversations.length === 0) return;
+            const savedId = this.currentConversationId || this.getStoredConversationId();
+            if (savedId && this.conversations.some(c => c.conversationId === savedId)) {
+                await this.selectConversation(savedId);
+                return;
+            }
+            await this.selectConversation(this.conversations[0].conversationId);
+        },
+
         async selectConversation(id) {
             if (this.isStreaming) return;
             this.currentConversationId = id;
+            this.storeConversationId(id);
             this.messages = [];
             this.streamingContent = '';
             this.rawResponses = [];
@@ -1588,6 +1619,7 @@ function chatApp() {
                 if (conv && conv.conversationId) {
                     this.conversations.unshift(conv);
                     this.currentConversationId = conv.conversationId;
+                    this.storeConversationId(conv.conversationId);
                     this.currentConversation = conv;
                     this.messages = [];
                     this.generations = {};

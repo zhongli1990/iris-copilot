@@ -278,6 +278,9 @@ ClassMethod CreateConversation() As %Status
         if $isobject(body) {
             set title = body.%Get("title")
             set targetNs = body.%Get("targetNamespace")
+            if targetNs = "" {
+                set targetNs = body.%Get("namespace")
+            }
         }
 
         set conv = ##class(AIAgent.Model.Conversation).Create(title, targetNs)
