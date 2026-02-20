@@ -1,0 +1,69 @@
+{
+  "generatedAt": "2026-02-20T09:12:44.652Z",
+  "sourceReport": "tests/realworld-e2e-last-report.json",
+  "method": "LLM-as-a-Judge (outcome relevance + correctness vs expected behavior)",
+  "summary": {
+    "total": 10,
+    "judgePass": 9,
+    "judgeFail": 1
+  },
+  "cases": [
+    {
+      "id": "RW01",
+      "judge": "pass",
+      "rationale": "Returned real production topology with host details and correct non-approval execution."
+    },
+    {
+      "id": "RW02",
+      "judge": "pass",
+      "rationale": "Mapped to queue target correctly; environment has zero queue rows so explicit empty-state response is correct."
+    },
+    {
+      "id": "RW03",
+      "judge": "pass",
+      "rationale": "Returned live recent production events and correct read-only execution behavior."
+    },
+    {
+      "id": "RW04",
+      "judge": "pass",
+      "rationale": "Returned concrete lookup table content for ErrorCodes from live IRIS data."
+    },
+    {
+      "id": "RW05",
+      "judge": "fail",
+      "rationale": "Expected class metadata retrieval, but operation failed with IRIS 404 and no action target. Outcome not functionally correct."
+    },
+    {
+      "id": "RW06",
+      "judge": "pass",
+      "rationale": "Invocation policy was read and rendered with mode and argument limit."
+    },
+    {
+      "id": "RW07",
+      "judge": "pass",
+      "rationale": "Class package pattern query resolved to dictionary/classes and returned relevant NHSTIE2 class list."
+    },
+    {
+      "id": "RW08",
+      "judge": "pass",
+      "rationale": "Dry-run add host executed as non-mutating preview with explicit dry-run confirmation."
+    },
+    {
+      "id": "RW09",
+      "judge": "pass",
+      "rationale": "Non-dry-run host add correctly required approval and produced a pending action plan."
+    },
+    {
+      "id": "RW10",
+      "judge": "pass",
+      "rationale": "Dry-run remove host executed with explicit no-change confirmation."
+    }
+  ],
+  "recommendedFixes": [
+    {
+      "id": "RW05",
+      "action": "Investigate IRIS /ai/operate handler for target classmeta/<ClassName> in deployed namespace and ensure latest Dispatcher class is imported/compiled."
+    }
+  ]
+}
+
