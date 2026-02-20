@@ -110,12 +110,7 @@ Health checks:
 
 ## License
 
-This project uses a dual-license model:
-
-1. **Open-source**: AGPL-3.0-only (`LICENSE`)
-2. **Enterprise commercial**: Lightweight Integration Limited commercial terms (`LICENSE-ENTERPRISE.md`)
-
-If your enterprise deployment cannot comply with AGPL obligations, contact:
-**Zhong@@li-ai.co.uk** for commercial licensing.
+This project is licensed under the **MIT License**.
+See `LICENSE` for the full license text.
 
 Copyright (c) Lightweight Integration Limited.
