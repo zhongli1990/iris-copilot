@@ -309,17 +309,24 @@ export class Orchestrator {
     if (parsedGeneric?.action.op && parsedGeneric.action.target) {
       const isRead = parsedGeneric.action.op === 'query' || parsedGeneric.action.op === 'discover';
       const dryRun = parsedGeneric.dryRun;
-      if (isRead || dryRun) {
+      const requiresApproval = this.shouldRequireApproval(parsedGeneric.action.op, dryRun);
+      if (isRead || dryRun || !requiresApproval) {
         try {
-          const opResult = await this.irisClient.operate({
-            namespace: input.namespace,
-            op: parsedGeneric.action.op,
-            target: parsedGeneric.action.target,
-            action: isRead ? 'read' : 'apply',
-            args: (parsedGeneric.action.payload?.args || parsedGeneric.action.payload || {}) as Record<string, unknown>,
-            dryRun,
-          });
-          const data = this.unwrapData(opResult);
+          const args = (parsedGeneric.action.payload?.args || parsedGeneric.action.payload || {}) as Record<string, unknown>;
+          const batched = this.expandOperateBatch(parsedGeneric.action.target, args);
+          const dataRows: unknown[] = [];
+          for (const batchArgs of batched) {
+            const opResult = await this.irisClient.operate({
+              namespace: input.namespace,
+              op: parsedGeneric.action.op,
+              target: parsedGeneric.action.target,
+              action: isRead ? 'read' : 'apply',
+              args: batchArgs,
+              dryRun,
+            });
+            dataRows.push(this.unwrapData(opResult));
+          }
+          const data = dataRows.length === 1 ? dataRows[0] : dataRows;
           const lines: string[] = [];
           if (dryRun && !isRead) {
             lines.push('Dry-run executed. No production mutation was applied.');
@@ -341,7 +348,7 @@ export class Orchestrator {
             runner: 'orchestrator-action-broker',
             actions: [{
               ...parsedGeneric.action,
-              requiresApproval: false,
+              requiresApproval,
               status: 'executed',
             }],
             actionExecution: { mode: 'direct-read', executedCount: 1 },
@@ -359,7 +366,7 @@ export class Orchestrator {
                 runner: 'orchestrator-action-broker',
                 actions: [{
                   ...parsedGeneric.action,
-                  requiresApproval: false,
+                  requiresApproval: this.shouldRequireApproval(parsedGeneric.action.op, dryRun),
                   status: 'executed',
                 }],
                 actionExecution: { mode: 'direct-read', executedCount: 1 },
@@ -379,7 +386,7 @@ export class Orchestrator {
       return {
         response: [
           'Execution plan prepared. No production changes were executed yet.',
-          'Human approval is required before applying this mutation.',
+          'Approval placeholder: enable approval gate before applying this mutation.',
           'Proposed actions:',
           `- ${parsedGeneric.action.summary}`,
         ].join('\n'),
@@ -387,7 +394,7 @@ export class Orchestrator {
         runner: 'orchestrator-action-broker',
         actions: [{
           ...parsedGeneric.action,
-          requiresApproval: true,
+          requiresApproval,
           status: 'pending-approval',
         }],
         actionExecution: { mode: 'approval-required', executedCount: 0 },
@@ -742,15 +749,20 @@ export class Orchestrator {
       };
     }
 
-    const hostNameMatch = text.match(/\b(?:named|called)\s+([A-Za-z0-9_.-]+)/i);
+    const hostNameMatch = text.match(/\b(?:named|called)\s+([A-Za-z0-9_.-]+)/i)
+      || text.match(/\bbusiness (?:host|service|process|operation)\s+([A-Za-z0-9_.-]+)/i);
     const wantsHostMutation = /\b(add|create|new)\b.*\bbusiness (host|service|process|operation)\b/.test(lower)
       || /\bbusiness (host|service|process|operation)\b.*\b(add|create|new)\b/.test(lower);
     if (wantsHostMutation && hostNameMatch) {
-      const hostName = hostNameMatch[1];
+      const hostNames = this.extractEntityNames(text);
+      const hostName = hostNames[0] || hostNameMatch[1];
       let className = 'Ens.BusinessService';
       if (/\bbusiness process\b|\bprocess\b/.test(lower)) className = 'Ens.BusinessProcessBPL';
       if (/\bbusiness operation\b|\boperation\b/.test(lower)) className = 'Ens.BusinessOperation';
       const enabled = !/\bdisabled\b/.test(lower);
+      const configs = hostNames.length > 1
+        ? hostNames.map((name) => ({ name, className, category: 'AIGenerated', enabled }))
+        : undefined;
       return {
         dryRun,
         action: {
@@ -759,24 +771,26 @@ export class Orchestrator {
           op: 'mutate',
           target: 'production/host/add',
           summary: `Add host '${hostName}' (${className}), enabled=${enabled ? 'true' : 'false'}.`,
-          requiresApproval: true,
+          requiresApproval: this.shouldRequireApproval('mutate', dryRun),
           status: 'pending-approval',
           payload: {
             args: {
-              config: {
+              config: configs ? undefined : {
                 name: hostName,
                 className,
                 category: 'AIGenerated',
                 enabled,
               },
+              configs,
             },
           },
         },
       };
     }
 
-    if ((/\bremove\b|\bdelete\b/.test(lower)) && /\bbusiness host\b/.test(lower) && hostNameMatch) {
-      const hostName = hostNameMatch[1];
+    if ((/\bremove\b|\bdelete\b/.test(lower)) && /\bbusiness (host|service|process|operation)\b/.test(lower) && hostNameMatch) {
+      const hostNames = this.extractEntityNames(text);
+      const hostName = hostNames[0] || hostNameMatch[1];
       return {
         dryRun,
         action: {
@@ -784,10 +798,33 @@ export class Orchestrator {
           type: 'remove_production_host',
           op: 'mutate',
           target: 'production/host/remove',
-          summary: `Remove host '${hostName}'.`,
-          requiresApproval: true,
+          summary: `Remove host(s): ${hostNames.length > 1 ? hostNames.join(', ') : `'${hostName}'`}.`,
+          requiresApproval: this.shouldRequireApproval('mutate', dryRun),
           status: 'pending-approval',
-          payload: { args: { name: hostName } },
+          payload: { args: { name: hostName, names: hostNames.length > 1 ? hostNames : undefined } },
+        },
+      };
+    }
+
+    if ((/\b(edit|update|modify|set)\b/.test(lower)) && /\bbusiness (host|service|process|operation)\b/.test(lower) && hostNameMatch) {
+      const hostNames = this.extractEntityNames(text);
+      const hostName = hostNames[0] || hostNameMatch[1];
+      const settingMatch = text.match(/\bset\s+([A-Za-z0-9_.-]+)\s*=\s*([^\n,;]+)/i);
+      const settingName = settingMatch ? settingMatch[1] : 'Enabled';
+      const settingValue = settingMatch ? settingMatch[2].trim() : (/\bdisable|disabled\b/.test(lower) ? '0' : '1');
+      const settings = [{ name: settingName, value: settingValue }];
+      const updates = hostNames.length > 1 ? hostNames.map((name) => ({ name, settings })) : undefined;
+      return {
+        dryRun,
+        action: {
+          id: this.actionId(),
+          type: 'update_production_host_settings',
+          op: 'mutate',
+          target: 'production/host/settings',
+          summary: `Update host setting(s) ${settingName}=${settingValue} for ${hostNames.length > 1 ? hostNames.join(', ') : `'${hostName}'`}.`,
+          requiresApproval: this.shouldRequireApproval('mutate', dryRun),
+          status: 'pending-approval',
+          payload: { args: { name: hostName, settings, updates } },
         },
       };
     }
@@ -968,7 +1005,7 @@ export class Orchestrator {
       if (!entry && !hasGenericShape) continue;
 
       const requiresApproval = hasGenericShape
-        ? (op === 'mutate' || op === 'execute' || op === 'govern')
+        ? this.shouldRequireApproval(op, false)
         : !!entry?.requiresApproval;
 
       normalized.push({
@@ -985,6 +1022,40 @@ export class Orchestrator {
       });
     }
     return normalized;
+  }
+
+  private shouldRequireApproval(op: string | undefined, dryRun: boolean): boolean {
+    if (!op) return false;
+    if (dryRun) return false;
+    if (op === 'mutate' || op === 'execute' || op === 'govern') {
+      return config.genericOperate.approvalRequiredForMutation;
+    }
+    return false;
+  }
+
+  private expandOperateBatch(target: string | undefined, args: Record<string, unknown>): Array<Record<string, unknown>> {
+    if (!target) return [args];
+    if (target === 'production/host/add' && Array.isArray(args.configs)) {
+      return args.configs.map((config) => ({ config: config as Record<string, unknown> }));
+    }
+    if (target === 'production/host/remove' && Array.isArray(args.names)) {
+      return args.names.map((name) => ({ name }));
+    }
+    if (target === 'production/host/settings' && Array.isArray(args.updates)) {
+      return args.updates.map((u) => u as Record<string, unknown>);
+    }
+    return [args];
+  }
+
+  private extractEntityNames(message: string): string[] {
+    const m = message.match(/\b(?:named|called)\s+([A-Za-z0-9_.\-,\sand]+)/i);
+    if (!m) return [];
+    const raw = m[1]
+      .split(/(?:\band\b|,)/i)
+      .map((s) => s.trim().replace(/[.;:!?]+$/g, ''))
+      .filter(Boolean)
+      .filter((s) => /^[A-Za-z0-9_.-]+$/.test(s));
+    return Array.from(new Set(raw));
   }
 
   private summarizeReadResult(type: string, target: string | undefined, data: unknown): string {
