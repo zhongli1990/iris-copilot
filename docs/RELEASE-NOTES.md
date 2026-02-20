@@ -1,5 +1,46 @@
 ﻿# Release Notes
 
+## v0.1.3 - 2026-02-20
+
+### Summary
+Documentation, governance, and regression-evaluation release: expanded real-world lifecycle query coverage, live E2E outcome capture with LLM-as-a-Judge scoring, setup clarity improvements, and public repo hardening.
+
+### Changes
+- Real-world lifecycle coverage:
+  - Expanded query catalog from RW01-RW10 to RW01-RW34 in:
+    - `docs/REALWORLD-LIFECYCLE-QUERIES.md`
+    - `tests/realworld-e2e-cases.json`
+  - Added human-readable appendix of actual query/answer outputs from latest E2E run in:
+    - `docs/REALWORLD-LIFECYCLE-QUERIES.md`
+- Evaluation reporting:
+  - Refreshed live run artifact:
+    - `tests/realworld-e2e-last-report.json`
+  - Refreshed judge artifact (LLM-as-a-Judge):
+    - `tests/realworld-e2e-judge-report.json`
+  - Updated summary report with honest product-vision alignment verdict:
+    - `docs/REALWORLD-EVAL-REPORT.md`
+- Setup/operations docs:
+  - Added explicit IRIS Web Application setup step after import in:
+    - `README.md`
+- Licensing/docs policy:
+  - README license section updated to standard MIT statement.
+  - Design/generic markdown docs moved to local-only policy and removed from published git history.
+- Neutral documentation wording:
+  - Removed site-specific `Bradford` naming from published markdown docs.
+
+### Validation
+- Executed `npm.cmd run e2e:realworld` against live bridge/IRIS.
+- Latest measured outcome:
+  - Total: 34
+  - Passed: 16
+  - Failed: 18
+  - Pass rate: 47.1%
+- Judge report and markdown evaluation updated from live outputs.
+
+### Known Gaps (from live evaluation)
+- Planner/action mapping gaps remain for several design/execution prompts (`plan/preview` style coverage).
+- Target naming normalization needed (`generation/...` vs `generate/...` expectation).
+- Some dry-run/approval semantics and rollback flow details still require hardening.
 ## v0.1.2 - 2026-02-19
 
 ### Summary
@@ -71,4 +112,5 @@ Stability and capability release for real-world IRIS Copilot operation: model-dr
 - Bridge TypeScript build passes (`npm run build`).
 - Versioned IRIS export packages regenerated through v17.
 - Manual E2E validation guidance included in `docs/USER-GUIDE.md` for operators.
+
 
