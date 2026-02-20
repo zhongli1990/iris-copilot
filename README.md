@@ -97,4 +97,12 @@ Health checks:
 
 ## License
 
-Internal NHS Bradford Teaching Hospitals Trust use.
+This project uses a dual-license model:
+
+1. **Open-source**: AGPL-3.0-only (`LICENSE`)
+2. **Enterprise commercial**: Lightweight Integration Limited commercial terms (`LICENSE-ENTERPRISE.md`)
+
+If your enterprise deployment cannot comply with AGPL obligations, contact:
+**Zhong@@li-ai.co.uk** for commercial licensing.
+
+Copyright (c) Lightweight Integration Limited.
