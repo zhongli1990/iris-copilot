@@ -24,6 +24,7 @@ Thumbs.db
 # Generated deployment exports (keep source generator, exclude generated blobs)
 deploy/AIAgent-export*.xml
 !deploy/AIAgent-export-v24.xml
+!deploy/AIAgent-export-v25.xml
 
 # Local/private docs (do not publish)
 docs/*[Dd][Ee][Ss][Ii][Gg][Nn]*.md
