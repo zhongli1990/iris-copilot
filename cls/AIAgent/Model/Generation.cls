@@ -79,6 +79,20 @@ ClassMethod FindById(generationId As %String) As AIAgent.Model.Generation
     return ""
 }
 
+/// Find the most recent generation by status (default: preview).
+ClassMethod FindLatestByStatus(status As %String = "preview") As AIAgent.Model.Generation
+{
+    set sql = "SELECT TOP 1 ID FROM AIAgent_Model.Generation WHERE ""Status"" = ? ORDER BY CreatedAt DESC"
+    set stmt = ##class(%SQL.Statement).%New()
+    set sc = stmt.%Prepare(sql)
+    if $$$ISERR(sc) return ""
+    set rs = stmt.%Execute(status)
+    if rs.%Next() {
+        return ##class(AIAgent.Model.Generation).%OpenId(rs.%GetData(1))
+    }
+    return ""
+}
+
 /// Update status and save.
 Method UpdateStatus(newStatus As %String, approvedBy As %String = "") As %Status
 {

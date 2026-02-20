@@ -108,8 +108,27 @@ ClassMethod GetHostType(className As %String) As %String [ Private ]
 /// config expects: {name, className, category, enabled, settings:{key:val,...}, comment}
 ClassMethod AddBusinessHost(config As %DynamicObject) As %Status
 {
+    quit ..EnsureBusinessHost(config, .opResult)
+}
+
+/// Idempotent add host with structured outcome for demo/runtime reporting.
+ClassMethod EnsureBusinessHost(config As %DynamicObject, ByRef opResult As %DynamicObject) As %Status
+{
+    set opResult = ##class(%DynamicObject).%New()
     set sc = $$$OK
     try {
+        if '$isobject(config) {
+            return $$$ERROR($$$GeneralError, "Host config is required")
+        }
+        set hostName = config.%Get("name")
+        set className = config.%Get("className")
+        if hostName = "" {
+            return $$$ERROR($$$GeneralError, "Host name is required")
+        }
+        if className = "" {
+            return $$$ERROR($$$GeneralError, "Host className is required")
+        }
+
         do ##class(Ens.Director).GetProductionStatus(.prodName, .prodStatus)
         if prodName = "" {
             return $$$ERROR($$$GeneralError, "No production found in namespace")
@@ -119,42 +138,60 @@ ClassMethod AddBusinessHost(config As %DynamicObject) As %Status
             return $$$ERROR($$$GeneralError, "Cannot open production "_prodName)
         }
 
-        // Check for duplicate
         for i = 1:1:prodDef.Items.Count() {
-            if prodDef.Items.GetAt(i).Name = config.name {
-                return $$$ERROR($$$GeneralError, "Host '"_config.name_"' already exists in production")
+            set existing = prodDef.Items.GetAt(i)
+            if existing.Name = hostName {
+                set opResult.action = "add"
+                set opResult.hostName = hostName
+                set opResult.className = existing.ClassName
+                set opResult.status = "exists"
+                set opResult.enabled = +$get(existing.Enabled)
+                set opResult.category = $get(existing.Category)
+                set opResult.message = "Host already exists; no mutation applied."
+                return $$$OK
             }
         }
 
-        // Create new item
         set item = ##class(Ens.Config.Item).%New()
-        set item.Name = config.name
-        set item.ClassName = config.className
-        set item.Category = $select($isobject(config)&&(config.category'=""):config.category, 1:"AIGenerated")
-        set item.Enabled = $select($isobject(config)&&(config.enabled'=""):config.enabled, 1:1)
-        set item.Comment = $select($isobject(config)&&(config.comment'=""):config.comment, 1:"Added by IRIS Copilot")
+        set item.Name = hostName
+        set item.ClassName = className
+        set item.Category = $select(config.%Get("category")'="":config.%Get("category"), 1:"AIGenerated")
+        set enabledRequested = $select(config.%Get("enabled")'="":+config.%Get("enabled"), 1:1)
+        set item.Comment = $select(config.%Get("comment")'="":config.%Get("comment"), 1:"Added by IRIS CoPilot")
 
-        // Build settings string from config.settings object
-        if $isobject(config.settings) {
-            set settingsStr = ""
-            set iter = config.settings.%GetIterator()
-            while iter.%GetNext(.key, .val) {
-                set:settingsStr'="" settingsStr = settingsStr _ ","
-                set settingsStr = settingsStr _ key _ "=" _ val
+        if $isobject(config.%Get("settings")) {
+            set sc = ..ApplySettingsObject(.item, config.%Get("settings"), 0)
+            if $$$ISERR(sc) {
+                return sc
             }
-            set item.Settings = settingsStr
         }
 
         do prodDef.Items.Insert(item)
         set sc = prodDef.%Save()
-
-        if $$$ISOK(sc) {
-            do ##class(AIAgent.Model.AuditEntry).LogSuccess("deploy", config.name, "Added to production "_prodName)
-            do ##class(AIAgent.Util.Logger).Info("ProductionManager", "Added host", config.name)
+        if $$$ISERR(sc) {
+            return sc
         }
+
+        // Apply runtime enable/disable via Director API (safer than direct assignment on Ens.Config.Item).
+        set scEnable = ##class(Ens.Director).EnableConfigItem(hostName, enabledRequested, 1)
+        if $$$ISERR(scEnable) {
+            // Keep this non-fatal for demo flow: config exists and was saved; capture warning only.
+            do ##class(AIAgent.Util.Logger).Error("ProductionManager", "EnableConfigItem warning", $system.Status.GetOneErrorText(scEnable))
+        }
+
+        do ##class(AIAgent.Model.AuditEntry).LogSuccess("deploy", hostName, "Added to production "_prodName)
+        do ##class(AIAgent.Util.Logger).Info("ProductionManager", "Added host", hostName)
+
+        set opResult.action = "add"
+        set opResult.hostName = hostName
+        set opResult.className = className
+        set opResult.status = "created"
+        set opResult.enabled = enabledRequested
+        set opResult.category = item.Category
+        set opResult.message = "Host created."
     } catch ex {
         set sc = ex.AsStatus()
-        do ##class(AIAgent.Model.AuditEntry).LogFailure("deploy", config.name, ex.DisplayString())
+        do ##class(AIAgent.Model.AuditEntry).LogFailure("deploy", $get(hostName), ex.DisplayString())
     }
     return sc
 }
@@ -162,8 +199,18 @@ ClassMethod AddBusinessHost(config As %DynamicObject) As %Status
 /// Remove a business host from the production by name.
 ClassMethod RemoveBusinessHost(itemName As %String) As %Status
 {
+    quit ..RemoveBusinessHostEx(itemName, .opResult)
+}
+
+/// Idempotent remove host with structured outcome.
+ClassMethod RemoveBusinessHostEx(itemName As %String, ByRef opResult As %DynamicObject) As %Status
+{
+    set opResult = ##class(%DynamicObject).%New()
     set sc = $$$OK
     try {
+        if itemName = "" {
+            return $$$ERROR($$$GeneralError, "Host name is required")
+        }
         do ##class(Ens.Director).GetProductionStatus(.prodName, .prodStatus)
         set prodDef = ##class(Ens.Config.Production).%OpenId(prodName)
         if '$isobject(prodDef) {
@@ -179,14 +226,24 @@ ClassMethod RemoveBusinessHost(itemName As %String) As %Status
             }
         }
         if 'found {
-            return $$$ERROR($$$GeneralError, "Host '"_itemName_"' not found in production")
+            set opResult.action = "remove"
+            set opResult.hostName = itemName
+            set opResult.status = "not_found"
+            set opResult.message = "Host was not present; no mutation applied."
+            return $$$OK
         }
-        set sc = prodDef.%Save()
 
-        if $$$ISOK(sc) {
-            do ##class(AIAgent.Model.AuditEntry).LogSuccess("delete", itemName, "Removed from production")
-            do ##class(AIAgent.Util.Logger).Info("ProductionManager", "Removed host", itemName)
+        set sc = prodDef.%Save()
+        if $$$ISERR(sc) {
+            return sc
         }
+        do ##class(AIAgent.Model.AuditEntry).LogSuccess("delete", itemName, "Removed from production")
+        do ##class(AIAgent.Util.Logger).Info("ProductionManager", "Removed host", itemName)
+
+        set opResult.action = "remove"
+        set opResult.hostName = itemName
+        set opResult.status = "removed"
+        set opResult.message = "Host removed."
     } catch ex {
         set sc = ex.AsStatus()
     }
@@ -197,8 +254,21 @@ ClassMethod RemoveBusinessHost(itemName As %String) As %Status
 /// settings is a %DynamicObject of {key: value} pairs.
 ClassMethod UpdateHostSettings(itemName As %String, settings As %DynamicObject) As %Status
 {
+    quit ..UpdateHostSettingsEx(itemName, settings, .opResult)
+}
+
+/// Update host settings with structured per-item outcome.
+/// Special key handling:
+/// - Enabled => updates item.Enabled property
+/// - Comment => updates item.Comment property
+ClassMethod UpdateHostSettingsEx(itemName As %String, settings As %DynamicObject, ByRef opResult As %DynamicObject) As %Status
+{
+    set opResult = ##class(%DynamicObject).%New()
     set sc = $$$OK
     try {
+        if (itemName = "") || ('$isobject(settings)) {
+            return $$$ERROR($$$GeneralError, "Host name and settings object are required")
+        }
         do ##class(Ens.Director).GetProductionStatus(.prodName, .prodStatus)
         set prodDef = ##class(Ens.Config.Production).%OpenId(prodName)
         if '$isobject(prodDef) {
@@ -209,26 +279,113 @@ ClassMethod UpdateHostSettings(itemName As %String, settings As %DynamicObject) 
         for i = 1:1:prodDef.Items.Count() {
             set item = prodDef.Items.GetAt(i)
             if item.Name = itemName {
-                // Build new settings string
-                set settingsStr = ""
+                set found = 1
+                set applied = ##class(%DynamicObject).%New()
                 set iter = settings.%GetIterator()
                 while iter.%GetNext(.key, .val) {
-                    set:settingsStr'="" settingsStr = settingsStr _ ","
-                    set settingsStr = settingsStr _ key _ "=" _ val
+                    set keyLow = $zconvert(key, "L")
+                    if keyLow = "enabled" {
+                        // Apply Enabled as a runtime config-item toggle via Director.
+                        set scEnable = ##class(Ens.Director).EnableConfigItem(itemName, +val, 1)
+                        if $$$ISERR(scEnable) {
+                            return scEnable
+                        }
+                        set applied.Enabled = +val
+                    } elseif keyLow = "comment" {
+                        set item.Comment = val
+                        set applied.Comment = val
+                    } else {
+                        set scSet = ..SetItemSetting(.item, key, val)
+                        if $$$ISERR(scSet) {
+                            return scSet
+                        }
+                        do applied.%Set(key, val)
+                    }
                 }
-                set item.Settings = settingsStr
-                set found = 1
+                set opResult.applied = applied
                 quit
             }
         }
+
         if 'found {
-            return $$$ERROR($$$GeneralError, "Host '"_itemName_"' not found")
+            set opResult.action = "settings"
+            set opResult.hostName = itemName
+            set opResult.status = "not_found"
+            set opResult.message = "Host was not found; no mutation applied."
+            return $$$OK
         }
+
         set sc = prodDef.%Save()
+        if $$$ISERR(sc) {
+            return sc
+        }
+
+        set opResult.action = "settings"
+        set opResult.hostName = itemName
+        set opResult.status = "updated"
+        set opResult.message = "Host settings updated."
     } catch ex {
         set sc = ex.AsStatus()
     }
     return sc
+}
+
+ClassMethod SetItemSetting(ByRef item, key As %String, val As %String) As %Status [ Private ]
+{
+    try {
+        set item.Settings(key) = val
+    } catch ex {
+        return ex.AsStatus()
+    }
+    return $$$OK
+}
+
+ClassMethod ApplySettingsObject(ByRef item, settings As %DynamicObject, clearExisting As %Boolean = 0) As %Status [ Private ]
+{
+    if '$isobject(settings) {
+        return $$$OK
+    }
+    try {
+        if clearExisting {
+            kill item.Settings
+        }
+        set iter = settings.%GetIterator()
+        while iter.%GetNext(.key, .val) {
+            if key = "" continue
+            set item.Settings(key) = val
+        }
+    } catch ex {
+        return ex.AsStatus()
+    }
+    return $$$OK
+}
+
+ClassMethod SettingsStringToObject(settingsStr As %String) As %DynamicObject [ Private ]
+{
+    set out = ##class(%DynamicObject).%New()
+    if settingsStr = "" quit out
+    for s = 1:1:$length(settingsStr, ",") {
+        set pair = $piece(settingsStr, ",", s)
+        if pair [ "=" {
+            set sName = $piece(pair, "=", 1)
+            set sValue = $piece(pair, "=", 2, *)
+            do out.%Set(sName, sValue)
+        }
+    }
+    quit out
+}
+
+ClassMethod SettingsObjectToString(settings As %DynamicObject) As %String [ Private ]
+{
+    set settingsStr = ""
+    if '$isobject(settings) quit settingsStr
+    set iter = settings.%GetIterator()
+    while iter.%GetNext(.key, .val) {
+        if key = "" continue
+        set:settingsStr'="" settingsStr = settingsStr _ ","
+        set settingsStr = settingsStr _ key _ "=" _ val
+    }
+    quit settingsStr
 }
 
 /// Start the production.

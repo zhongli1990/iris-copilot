@@ -420,8 +420,12 @@ ClassMethod ApproveGeneration() As %Status
 
         set generationId = body.%Get("generationId")
         if generationId = "" {
-            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'generationId' is required", 400))
-            return $$$OK
+            set gen = ##class(AIAgent.Model.Generation).FindLatestByStatus("preview")
+            if '$isobject(gen) {
+                do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("NO_PENDING_GENERATION", "No pending preview generation available to approve", 409))
+                return $$$OK
+            }
+            set generationId = gen.GenerationId
         }
 
         set result = ##class(AIAgent.Engine.Orchestrator).ApproveAndDeploy(generationId)
@@ -454,8 +458,12 @@ ClassMethod RejectGeneration() As %Status
 
         set generationId = body.%Get("generationId")
         if generationId = "" {
-            do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'generationId' is required", 400))
-            return $$$OK
+            set gen = ##class(AIAgent.Model.Generation).FindLatestByStatus("preview")
+            if '$isobject(gen) {
+                do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("NO_PENDING_GENERATION", "No pending preview generation available to reject", 409))
+                return $$$OK
+            }
+            set generationId = gen.GenerationId
         }
 
         set reason = body.%Get("reason")
@@ -1050,19 +1058,27 @@ ClassMethod Operate() As %Status
                 set plan.message = "Execution was not applied because dryRun=true"
                 set result.data = plan
                 set meta.capability = "execute.plan"
-            } elseif target = "generation/approve" {
+            } elseif (target = "generation/approve") || (target = "generate/approve") {
                 set generationId = args.%Get("generationId")
                 if generationId = "" {
-                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.generationId' is required for target generation/approve", 400))
-                    return $$$OK
+                    set gen = ##class(AIAgent.Model.Generation).FindLatestByStatus("preview")
+                    if '$isobject(gen) {
+                        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("NO_PENDING_GENERATION", "No pending preview generation available to approve", 409))
+                        return $$$OK
+                    }
+                    set generationId = gen.GenerationId
                 }
                 set result.data = ##class(AIAgent.Engine.Orchestrator).ApproveAndDeploy(generationId)
                 set meta.capability = "execute.generation.approve"
-            } elseif target = "generation/reject" {
+            } elseif (target = "generation/reject") || (target = "generate/reject") {
                 set generationId = args.%Get("generationId")
                 if generationId = "" {
-                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.generationId' is required for target generation/reject", 400))
-                    return $$$OK
+                    set gen = ##class(AIAgent.Model.Generation).FindLatestByStatus("preview")
+                    if '$isobject(gen) {
+                        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("NO_PENDING_GENERATION", "No pending preview generation available to reject", 409))
+                        return $$$OK
+                    }
+                    set generationId = gen.GenerationId
                 }
                 set reason = args.%Get("reason")
                 set sc = ##class(AIAgent.Engine.Orchestrator).RejectGeneration(generationId, reason)
@@ -1161,43 +1177,121 @@ ClassMethod Operate() As %Status
                 set result.data = plan
                 set meta.capability = "mutate.plan"
             } elseif target = "production/host/add" {
-                set hostConfig = args.%Get("config")
-                if '$isobject(hostConfig) set hostConfig = args
-                set sc = ##class(AIAgent.Engine.ProductionManager).AddBusinessHost(hostConfig)
-                if $$$ISERR(sc) {
-                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
-                    return $$$OK
+                set items = ##class(%DynamicArray).%New()
+                set configs = args.%Get("configs")
+                if $isobject(configs) {
+                    for i=0:1:(configs.%Size()-1) {
+                        set cfg = configs.%Get(i)
+                        if '$isobject(cfg) continue
+                        set sc = ##class(AIAgent.Engine.ProductionManager).EnsureBusinessHost(cfg, .opResult)
+                        if $$$ISERR(sc) {
+                            set errObj = ##class(%DynamicObject).%New()
+                            set errObj.action = "add"
+                            set errObj.hostName = cfg.%Get("name")
+                            set errObj.status = "error"
+                            set errObj.error = $system.Status.GetOneErrorText(sc)
+                            do items.%Push(errObj)
+                        } else {
+                            do items.%Push(opResult)
+                        }
+                    }
+                } else {
+                    set hostConfig = args.%Get("config")
+                    if '$isobject(hostConfig) set hostConfig = args
+                    set sc = ##class(AIAgent.Engine.ProductionManager).EnsureBusinessHost(hostConfig, .opResult)
+                    if $$$ISERR(sc) {
+                        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+                        return $$$OK
+                    }
+                    do items.%Push(opResult)
                 }
-                set result.data = ##class(AIAgent.Engine.ProductionManager).GetTopology()
+                set out = ##class(%DynamicObject).%New()
+                set out.target = target
+                set out.count = items.%Size()
+                set out.results = items
+                set result.data = out
                 set meta.capability = "mutate.production.host.add"
             } elseif target = "production/host/remove" {
-                set hostName = args.%Get("name")
-                if hostName = "" set hostName = args.%Get("itemName")
-                if hostName = "" {
-                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.name' is required for target production/host/remove", 400))
-                    return $$$OK
+                set items = ##class(%DynamicArray).%New()
+                set names = args.%Get("names")
+                if $isobject(names) {
+                    for i=0:1:(names.%Size()-1) {
+                        set hostName = names.%Get(i)
+                        set sc = ##class(AIAgent.Engine.ProductionManager).RemoveBusinessHostEx(hostName, .opResult)
+                        if $$$ISERR(sc) {
+                            set errObj = ##class(%DynamicObject).%New()
+                            set errObj.action = "remove"
+                            set errObj.hostName = hostName
+                            set errObj.status = "error"
+                            set errObj.error = $system.Status.GetOneErrorText(sc)
+                            do items.%Push(errObj)
+                        } else {
+                            do items.%Push(opResult)
+                        }
+                    }
+                } else {
+                    set hostName = args.%Get("name")
+                    if hostName = "" set hostName = args.%Get("itemName")
+                    if hostName = "" {
+                        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.name' is required for target production/host/remove", 400))
+                        return $$$OK
+                    }
+                    set sc = ##class(AIAgent.Engine.ProductionManager).RemoveBusinessHostEx(hostName, .opResult)
+                    if $$$ISERR(sc) {
+                        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+                        return $$$OK
+                    }
+                    do items.%Push(opResult)
                 }
-                set sc = ##class(AIAgent.Engine.ProductionManager).RemoveBusinessHost(hostName)
-                if $$$ISERR(sc) {
-                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
-                    return $$$OK
-                }
-                set result.data = ##class(AIAgent.Engine.ProductionManager).GetTopology()
+                set out = ##class(%DynamicObject).%New()
+                set out.target = target
+                set out.count = items.%Size()
+                set out.results = items
+                set result.data = out
                 set meta.capability = "mutate.production.host.remove"
             } elseif target = "production/host/settings" {
-                set hostName = args.%Get("name")
-                if hostName = "" set hostName = args.%Get("itemName")
-                set settings = args.%Get("settings")
-                if (hostName = "") || ('$isobject(settings)) {
-                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.name' and object 'args.settings' are required for target production/host/settings", 400))
-                    return $$$OK
+                set items = ##class(%DynamicArray).%New()
+                set updates = args.%Get("updates")
+                if $isobject(updates) {
+                    for i=0:1:(updates.%Size()-1) {
+                        set upd = updates.%Get(i)
+                        if '$isobject(upd) continue
+                        set hostName = upd.%Get("name")
+                        if hostName = "" set hostName = upd.%Get("itemName")
+                        set settings = upd.%Get("settings")
+                        if (hostName = "") || ('$isobject(settings)) continue
+                        set sc = ##class(AIAgent.Engine.ProductionManager).UpdateHostSettingsEx(hostName, settings, .opResult)
+                        if $$$ISERR(sc) {
+                            set errObj = ##class(%DynamicObject).%New()
+                            set errObj.action = "settings"
+                            set errObj.hostName = hostName
+                            set errObj.status = "error"
+                            set errObj.error = $system.Status.GetOneErrorText(sc)
+                            do items.%Push(errObj)
+                        } else {
+                            do items.%Push(opResult)
+                        }
+                    }
+                } else {
+                    set hostName = args.%Get("name")
+                    if hostName = "" set hostName = args.%Get("itemName")
+                    set settings = args.%Get("settings")
+                    if (hostName = "") || ('$isobject(settings)) {
+                        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("MISSING_FIELD", "'args.name' and object 'args.settings' are required for target production/host/settings", 400))
+                        return $$$OK
+                    }
+                    set sc = ##class(AIAgent.Engine.ProductionManager).UpdateHostSettingsEx(hostName, settings, .opResult)
+                    if $$$ISERR(sc) {
+                        do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
+                        return $$$OK
+                    }
+                    do items.%Push(opResult)
                 }
-                set sc = ##class(AIAgent.Engine.ProductionManager).UpdateHostSettings(hostName, settings)
-                if $$$ISERR(sc) {
-                    do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).StatusToError(sc))
-                    return $$$OK
-                }
-                set result.data = ##class(AIAgent.Engine.ProductionManager).GetTopology()
+                set out = ##class(%DynamicObject).%New()
+                set out.target = target
+                set out.count = items.%Size()
+                set out.results = items
+                set result.data = out
                 set meta.capability = "mutate.production.host.settings"
             } else {
                 do ##class(AIAgent.Util.JSON).WriteJSON(##class(AIAgent.Util.JSON).ErrorResponse("UNSUPPORTED_TARGET", "Unsupported mutate target: "_target, 400))
