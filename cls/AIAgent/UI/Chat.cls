@@ -1,11 +1,11 @@
-/// CSP page: Chat UI for the IRIS AI Agent Platform.
+﻿/// CSP page: Chat UI for the IRIS AI Agent Platform.
 /// Renders a complete single-page chat interface with conversation management,
 /// SSE streaming, code review panel, and production/runner status.
 /// 
 /// Uses Alpine.js for reactivity, Marked.js for Markdown rendering, and
 /// native EventSource for SSE streaming from the AI Agent Bridge.
 /// 
-/// Part of the IRIS AI Agent Platform (IRIS Copilot).
+/// Part of the IRIS AI Agent Platform (OpenLI IRIS CoPilot).
 Class AIAgent.UI.Chat Extends %CSP.Page
 {
 
@@ -13,7 +13,7 @@ Class AIAgent.UI.Chat Extends %CSP.Page
 Parameter CONTENTTYPE = "text/html";
 
 /// Page title shown in browser tab.
-Parameter PAGETITLE = "IRIS Copilot";
+Parameter PAGETITLE = "OpenLI IRIS CoPilot";
 
 /// Require authenticated session.
 Parameter SECURITYRESOURCE = "%Development";
@@ -26,7 +26,7 @@ ClassMethod OnPage() As %Status
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IRIS Copilot</title>
+    <title>OpenLI IRIS CoPilot</title>
 
     <!-- Alpine.js for reactivity -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -993,7 +993,7 @@ ClassMethod OnPage() As %Status
         <div class="sidebar-header">
             <h2>
                 <span class="logo-icon">IC</span>
-                IRIS Copilot
+                OpenLI IRIS CoPilot
             </h2>
             <button class="btn-new-chat" @click="createConversation()" :disabled="isStreaming">
                 + New
@@ -1031,7 +1031,7 @@ ClassMethod OnPage() As %Status
                     &#9776;
                 </button>
                 <span class="conversation-title-display"
-                      x-text="currentConversation ? (currentConversation.title || 'New Conversation') : 'IRIS Copilot'">
+                      x-text="currentConversation ? (currentConversation.title || 'New Conversation') : 'OpenLI IRIS CoPilot'">
                 </span>
             </div>
             <div class="top-bar-right">
@@ -1052,7 +1052,7 @@ ClassMethod OnPage() As %Status
             <template x-if="!currentConversationId">
                 <div class="welcome-screen">
                     <div class="welcome-logo">IC</div>
-                    <h1>IRIS Copilot</h1>
+                    <h1>OpenLI IRIS CoPilot</h1>
                     <p>AI-powered assistant for building and managing InterSystems IRIS interoperability productions. Ask me to create services, processes, operations, transforms, and more.</p>
                     <div class="welcome-suggestions">
                         <div class="suggestion-card" @click="useSuggestion('Create an HL7 ADT inbound service that reads from a TCP port and routes by message type')">
@@ -2110,3 +2110,4 @@ function chatApp() {
 }
 
 }
+
