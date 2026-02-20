@@ -97,8 +97,8 @@ export const config: AppConfig = {
   defaultRunner: env("DEFAULT_RUNNER", "openai-codex-sdk"),
   genericOperate: {
     enabled: env("GENERIC_OPERATE_ENABLED", "0") === "1",
-    approvalRequiredForMutation: env("GENERIC_OPERATE_APPROVAL_REQUIRED_FOR_MUTATION", "1") === "1",
-    dryRunRequired: env("GENERIC_OPERATE_DRYRUN_REQUIRED", "1") === "1",
+    approvalRequiredForMutation: env("GENERIC_OPERATE_APPROVAL_REQUIRED_FOR_MUTATION", "0") === "1",
+    dryRunRequired: env("GENERIC_OPERATE_DRYRUN_REQUIRED", "0") === "1",
   },
 
   anthropic: {
