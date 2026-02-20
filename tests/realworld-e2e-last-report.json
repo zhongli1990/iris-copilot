@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-20T13:01:42.973Z",
+  "generatedAt": "2026-02-20T15:58:54.930Z",
   "version": "0.1.3",
   "namespace": "DEMO2_AI2",
   "runner": "openai-codex-sdk",
@@ -18,13 +18,13 @@
         "response includes any [\"Production hosts (\",\"Current production has\"] : PASS",
         "response excludes [\"Prepare integration change plan\"] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Pathology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- Lab ORM Router | En",
+      "responsePreview": "Fetching full production topology to list all hosts with details.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Pathology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disab",
       "action": {
-        "id": "prod_topology",
+        "id": "production-topology-full",
         "type": "production_topology",
         "op": "query",
         "target": "production/topology",
-        "summary": "Fetch production topology to list all production hosts with full details",
+        "summary": "Read current production topology and items with full details.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/production/topology",
@@ -43,13 +43,13 @@
         "response includes any [\"Queue counts\",\"Current queue counts\",\"No queue rows were returned.\"] : PASS",
         "response excludes [\"Prepare integration change plan\"] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nNo queue rows were returned.\n\nExecution results:\n- Queue snapshot read: 0 host(s).",
+      "responsePreview": "Fetching current queue depths for all hosts.\n\nNo queue rows were returned.\n\nExecution results:\n- Queue snapshot read: 0 host(s).",
       "action": {
-        "id": "queue_counts",
+        "id": "queue-counts-all",
         "type": "queue_counts",
         "op": "query",
         "target": "production/queues",
-        "summary": "Read queue depth for all hosts",
+        "summary": "Read live queue counts for all production hosts.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/production/queues",
@@ -68,13 +68,13 @@
         "response includes any [\"Recent events\",\"Recent production events\"] : PASS",
         "response excludes [\"Prepare integration change plan\"] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nRecent events (50):\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' is up-to-date.\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' updating...\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' updated.",
+      "responsePreview": "Fetching recent production events.\n\nRecent events (50):\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' is up-to-date.\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' updating...\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' updated.\n-  | ",
       "action": {
-        "id": "event_log",
+        "id": "production-events-recent",
         "type": "event_log",
         "op": "query",
         "target": "production/events",
-        "summary": "Show recent production events",
+        "summary": "Read recent production events.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/production/events",
@@ -95,7 +95,7 @@
       ],
       "responsePreview": "Lookup table ErrorCodes entries (23):\n- DC01.01 => Patient Data Missing\n- DC01.02 => Document Data Missing\n- DC01.03 => Document Notes Exceeds 255 Characters\n- DC01.04 => Sender Organisation Exceeds 255 Characters\n- DC01.05 => Sender Department Exceeds 255 Characters\n- DC01.06 => Sender Person Exceeds 255 Characters\n- DC01.07 => Patient Family Name Exceeds 255 Characters\n- DC01.08 => Patient Given Names Exceeds 255 Characters\n- DC01.09 => Patient Birth Date Missing or Future Date\n- DC01.11 => Cl",
       "action": {
-        "id": "act-1771592212391-660",
+        "id": "act-1771602952321-326",
         "type": "lookup_read",
         "op": "query",
         "target": "lookup/ErrorCodes",
@@ -134,7 +134,7 @@
       ],
       "responsePreview": "Invocation policy:\n- Mode: allow-by-default\n- Max arguments: 4\n\nExecution results:\n- Invocation policy read.",
       "action": {
-        "id": "act-1771592212405-573",
+        "id": "act-1771602952333-550",
         "type": "invoke_policy_read",
         "op": "discover",
         "target": "invoke-policy",
@@ -159,7 +159,7 @@
       ],
       "responsePreview": "Classes (166):\n- NHSTIE2.Alert.Rule | Ens.Rule.Definition\n- NHSTIE2.App.CardioBridgeORU.Data.ProcedureCode | %Persistent\n- NHSTIE2.App.CardioBridgeORU.Data.SolicitedOrderStaging | %Persistent\n- NHSTIE2.App.CardioBridgeORU.Message.AdminMessage | Ens.Request,%XML.Adaptor,Ens.Util.MessageBodyMethods\n- NHSTIE2.App.CardioBridgeORU.Message.AlertMessage | Ens.AlertRequest\n- NHSTIE2.App.CardioBridgeORU.Message.AlertMessageVirtualProps | \n- NHSTIE2.App.CardioBridgeORU.Message.DeviceMetaXML | Ens.Request\n",
       "action": {
-        "id": "act-1771592212410-3",
+        "id": "act-1771602952339-876",
         "type": "dictionary_classes_read",
         "op": "query",
         "target": "dictionary/classes",
@@ -187,7 +187,7 @@
       ],
       "responsePreview": "Dry-run executed. No production mutation was applied.\n\nResult:\n```json\n{\n  \"status\": \"dry_run\",\n  \"target\": \"production/host/add\",\n  \"message\": \"Mutation was not applied because dryRun=true\"\n}\n```",
       "action": {
-        "id": "act-1771592212418-971",
+        "id": "act-1771602952347-535",
         "type": "add_production_host",
         "op": "mutate",
         "target": "production/host/add",
@@ -219,7 +219,7 @@
       ],
       "responsePreview": "Execution plan prepared. No production changes were executed yet.\nHuman approval is required before applying this mutation.\nProposed actions:\n- Add host 'AIAgent.DryRun.TestHost.' (Ens.BusinessService), enabled=false.",
       "action": {
-        "id": "act-1771592212424-965",
+        "id": "act-1771602952352-444",
         "type": "add_production_host",
         "op": "mutate",
         "target": "production/host/add",
@@ -251,7 +251,7 @@
       ],
       "responsePreview": "Dry-run executed. No production mutation was applied.\n\nResult:\n```json\n{\n  \"status\": \"dry_run\",\n  \"target\": \"production/host/remove\",\n  \"message\": \"Mutation was not applied because dryRun=true\"\n}\n```",
       "action": {
-        "id": "act-1771592212427-525",
+        "id": "act-1771602952354-933",
         "type": "remove_production_host",
         "op": "mutate",
         "target": "production/host/remove",
@@ -276,13 +276,13 @@
         "response includes any [\"Production status\",\"Runner health\",\"Bridge\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nProduction status:\n- Name: NHSTIE2.Production.OCSProduction\n- Status: Running\n- Namespace: DEMO2_AI2\n\nExecution results:\n- Production status: Running (NHSTIE2.Production.OCSProduction)",
+      "responsePreview": "Fetching production status and queue health. Runner status is not available via the current action catalog; I can report it if you can point me to a runner status endpoint or add a capability.\n\nProduction status:\n- Name: NHSTIE2.Production.OCSProduction\n- Status: Running\n- Namespace: DEMO2_AI2\nNo queue rows were returned.\n\nExecution results:\n- Production status: Running (NHSTIE2.Production.OCSProduction)\n- Queue snapshot read: 0 host(s).",
       "action": {
-        "id": "prod_status",
+        "id": "production-status",
         "type": "production_status",
         "op": "query",
         "target": "production/status",
-        "summary": "Get platform health, active production, and runner status",
+        "summary": "Read live production status.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/production/status",
@@ -301,13 +301,13 @@
         "response includes any [\"Production hosts (\",\"host(s)\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy\n- to.SCR eImport Pathology\n- to.SCR eImport Radiology\n- to.RMS eImport Oscopy\n- to.RMS eImport Radiology\n- Lab ORM Router\n- Osc ORM Router\n- Rad ORM Router\n- to.Winpath.ORM\n- from.Winpath.ORU\n- to.SolusCardiology.ORM\n- to.SolusEndoscopy.ORM\n- Lab ORU Router\n- Rad ORU Router\n- To.Sectra.ORM\n- from.Sectra.ORM\n- Osc ORU Router\n- Car ORU Router\n- Car ORM Router\n- from.Sectra.ORU\n- from.SolusEndoscopy.ORU\n- from.",
+      "responsePreview": "Fetching production topology to list all host names.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy\n- to.SCR eImport Pathology\n- to.SCR eImport Radiology\n- to.RMS eImport Oscopy\n- to.RMS eImport Radiology\n- Lab ORM Router\n- Osc ORM Router\n- Rad ORM Router\n- to.Winpath.ORM\n- from.Winpath.ORU\n- to.SolusCardiology.ORM\n- to.SolusEndoscopy.ORM\n- Lab ORU Router\n- Rad ORU Router\n- To.Sectra.ORM\n- from.Sectra.ORM\n- Osc ORU Router\n- Car ORU Router\n- Car ORM Router\n- from.Sectra.ORU\n- from.SolusEndoscopy",
       "action": {
-        "id": "prod_topology",
+        "id": "production-host-names",
         "type": "production_topology",
         "op": "query",
         "target": "production/topology",
-        "summary": "Fetch production topology to list all production host names",
+        "summary": "Read production topology to extract host names only.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/production/topology",
@@ -326,13 +326,13 @@
         "response includes any [\"disabled\",\"host\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Pathology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- Lab ORM Router | En",
+      "responsePreview": "Fetching production topology to identify disabled business hosts.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Pathology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disab",
       "action": {
-        "id": "prod_topology",
+        "id": "production-topology-disabled-hosts",
         "type": "production_topology",
         "op": "query",
         "target": "production/topology",
-        "summary": "Fetch production topology to identify disabled business hosts",
+        "summary": "Read production topology and filter for disabled business hosts.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/production/topology",
@@ -351,13 +351,13 @@
         "response includes any [\"Recent events\",\"No recent event rows were returned.\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nRecent events (50):\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' is up-to-date.\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' updating...\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' updated.",
+      "responsePreview": "Fetching recent production events; I will filter for ERROR level and last 60 minutes in the response.\n\nRecent events (50):\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' is up-to-date.\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' updating...\n-  |",
       "action": {
-        "id": "event_log",
+        "id": "production-events-recent",
         "type": "event_log",
         "op": "query",
         "target": "production/events",
-        "summary": "Fetch recent production events to filter ERROR level within last 60 minutes",
+        "summary": "Read recent production events to filter by level=ERROR and time window 60 minutes.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/production/events",
@@ -376,13 +376,13 @@
         "response includes any [\"Queue counts\",\"No queue rows were returned.\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nNo queue rows were returned.\n\nExecution results:\n- Queue snapshot read: 0 host(s).",
+      "responsePreview": "Fetching current queue depths and will rank top 10 hosts by depth.\n\nNo queue rows were returned.\n\nExecution results:\n- Queue snapshot read: 0 host(s).",
       "action": {
-        "id": "queue_counts",
+        "id": "queue-counts-top10",
         "type": "queue_counts",
         "op": "query",
         "target": "production/queues",
-        "summary": "Fetch queue depths to identify top 10 hosts by depth",
+        "summary": "Read live queue counts to compute top 10 hosts by queue depth.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/production/queues",
@@ -401,7 +401,7 @@
         "response includes any [\"plan\",\"A01\",\"A02\",\"A03\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Here's a design plan for **PAS → DrDoctor** ADT **A01/A02/A03** with transforms and routing. I'll keep it implementation‑ready but won't generate code until you confirm the open items.\n\n**1) Requirement Summary**\n- Source: PAS (likely IPM)\n- Messages: HL7 ADT A01, A02, A03\n- Target: DrDoctor\n- Goal: Route specific ADT events to DrDoctor with required HL7 transforms\n\n**2) Proposed Topology (Existing + New)**\n- **Inbound Service (existing)**: PAS inbound (e.g., \"HL7 from IPM\" using HTTP or TCP)\n- ",
+      "responsePreview": "Here's a concise interface plan for PAS → DrDoctor ADT A01/A02/A03, plus the minimum details I need to proceed to full design and code generation.\n\n**Interface Plan (High-Level)**\n- **Inbound**: TCP HL7 Business Service (PAS → IRIS)\n- **Routing**: By `MSH:9.1` (message type) and `MSH:9.2` (trigger event)\n- **Transforms**: Separate DTL per trigger event (A01/A02/A03) or a shared DTL with conditional mapping\n- **Outbound**: DrDoctor Business Operation (TCP, HTTP, or File depending on DrDoctor inte",
       "action": {}
     },
     {
@@ -410,18 +410,23 @@
       "query": "Create a change plan to add a new downstream operation to the current PAS router for A08 messages only.",
       "pass": false,
       "checks": [
-        "target in [\"plan/preview\"] => actual '' : FAIL",
-        "requiresApproval=false => actual true : FAIL",
+        "target in [\"plan/preview\"] => actual 'production/topology' : FAIL",
+        "requiresApproval=false => actual false : PASS",
         "response includes any [\"plan\",\"A08\",\"router\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Execution plan prepared. No production changes were executed yet.\nHuman approval is required before deployment or runtime mutations.\nProposed actions:\n- Prepare integration change plan and require explicit approval before apply/deploy.",
+      "responsePreview": "I will inspect the current production topology to identify the PAS router and existing routing rules/targets before drafting the change plan for A08 only. If you already know the PAS router host name and desired downstream operation class/endpoint, share them to speed this up.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Pathology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Radiology | EnsL",
       "action": {
-        "id": "act-1771592369269-209",
-        "type": "integration_change_plan",
-        "summary": "Prepare integration change plan and require explicit approval before apply/deploy.",
-        "requiresApproval": true,
-        "status": "pending-approval"
+        "id": "production-topology-for-pas-router",
+        "type": "production_topology",
+        "op": "query",
+        "target": "production/topology",
+        "summary": "Read current production topology to locate PAS router and related hosts.",
+        "requiresApproval": false,
+        "status": "executed",
+        "endpoint": "/production/topology",
+        "method": "GET",
+        "payload": {}
       }
     },
     {
@@ -435,7 +440,7 @@
         "response includes any [\"impact\",\"PID-3\",\"transform\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Impact assessment: changing PID-3 mapping in the existing PAS ADT transform is **high‑impact** and touches identity, routing, downstream acceptance, and audit trails.\n\n**Likely impact areas**\n1. **Patient identity in downstream systems**\n   - Many consumers treat `PID:3(1).1` as the local MRN and `PID:3(2).1` as NHS number.\n   - Swapping repeats or changing components can cause **mis‑identification**, duplicate patient creation, or message rejection.\n\n2. **Routing / business rules**\n   - Any rul",
+      "responsePreview": "To assess impact, I need two specifics:\n\n1. The exact transform class name (e.g., `AIAgent.Generated.PAS.DTL.ADT_A01_To_DrDoctor`).\n2. The proposed PID-3 change (current mapping vs new mapping, including repetition and component positions).\n\nIf you don't have the class name, tell me the router/operation name or a pattern (e.g., \"PAS ADT DTL\"), and I can locate the transform and analyze it.",
       "action": {}
     },
     {
@@ -444,31 +449,18 @@
       "query": "Create a dry-run plan for a new disabled business operation AIAgent.Generated.DrDoctor.Operation.",
       "pass": false,
       "checks": [
-        "target in [\"production/host/add\"] => actual 'production/host/add' : PASS",
+        "target in [\"production/host/add\"] => actual '' : FAIL",
         "requiresApproval=false => actual true : FAIL",
         "response includes any [\"Dry-run\",\"disabled\",\"business operation\"] : FAIL",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nPending approval actions are ready for `/api/actions/approve`.",
+      "responsePreview": "Execution plan prepared. No production changes were executed yet.\nHuman approval is required before deployment or runtime mutations.\nProposed actions:\n- Prepare integration change plan and require explicit approval before apply/deploy.",
       "action": {
-        "id": "dryrun_add_host",
-        "type": "add_production_host",
-        "op": "mutate",
-        "target": "production/host/add",
-        "summary": "Dry-run plan to add disabled business operation AIAgent.Generated.DrDoctor.Operation",
+        "id": "act-1771603026206-72",
+        "type": "integration_change_plan",
+        "summary": "Prepare integration change plan and require explicit approval before apply/deploy.",
         "requiresApproval": true,
-        "status": "pending-approval",
-        "endpoint": "/operate",
-        "method": "POST",
-        "payload": {
-          "args": {
-            "className": "AIAgent.Generated.DrDoctor.Operation",
-            "name": "AIAgent.Generated.DrDoctor.Operation",
-            "category": "Operation",
-            "enabled": 0,
-            "dryRun": true
-          }
-        }
+        "status": "pending-approval"
       }
     },
     {
@@ -477,18 +469,23 @@
       "query": "Prepare dry-run router rule updates to route ORM messages to a new operation.",
       "pass": false,
       "checks": [
-        "target in [\"plan/preview\"] => actual '' : FAIL",
-        "requiresApproval=false => actual true : FAIL",
-        "response includes any [\"dry-run\",\"ORM\",\"route\"] : FAIL",
+        "target in [\"plan/preview\"] => actual 'production/topology' : FAIL",
+        "requiresApproval=false => actual false : PASS",
+        "response includes any [\"dry-run\",\"ORM\",\"route\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Execution plan prepared. No production changes were executed yet.\nHuman approval is required before deployment or runtime mutations.\nProposed actions:\n- Prepare integration change plan and require explicit approval before apply/deploy.",
+      "responsePreview": "I will inspect the current production topology to identify the router and existing ORM routing rules before preparing the dry-run update plan. If you already know the router host name and new operation class/endpoint, share them to speed this up.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Pathology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Radiology | EnsLib.HL7.Operation.TCPOperation |",
       "action": {
-        "id": "act-1771592402343-389",
-        "type": "integration_change_plan",
-        "summary": "Prepare integration change plan and require explicit approval before apply/deploy.",
-        "requiresApproval": true,
-        "status": "pending-approval"
+        "id": "production-topology-for-router",
+        "type": "production_topology",
+        "op": "query",
+        "target": "production/topology",
+        "summary": "Read current production topology to locate HL7 router and related hosts.",
+        "requiresApproval": false,
+        "status": "executed",
+        "endpoint": "/production/topology",
+        "method": "GET",
+        "payload": {}
       }
     },
     {
@@ -504,7 +501,7 @@
       ],
       "responsePreview": "Execution plan prepared. No production changes were executed yet.\nHuman approval is required before deployment or runtime mutations.\nProposed actions:\n- Approve the pending generation and deploy to IRIS production.",
       "action": {
-        "id": "act-1771592407398-230",
+        "id": "act-1771603035703-224",
         "type": "approve_deploy_generation",
         "summary": "Approve the pending generation and deploy to IRIS production.",
         "requiresApproval": true,
@@ -520,18 +517,16 @@
       "query": "Approve the latest staged generation and deploy it now.",
       "pass": false,
       "checks": [
-        "target in [\"generate/approve\"] => actual 'generation/approve' : FAIL",
+        "target in [\"generate/approve\"] => actual '' : FAIL",
         "requiresApproval=true => actual true : PASS",
         "response includes any [\"approve\",\"deploy\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nPending approval actions are ready for `/api/actions/approve`.",
+      "responsePreview": "Execution plan prepared. No production changes were executed yet.\nHuman approval is required before deployment or runtime mutations.\nProposed actions:\n- Approve the pending generation and deploy to IRIS production.",
       "action": {
-        "id": "approve_generation",
+        "id": "act-1771603045938-982",
         "type": "approve_deploy_generation",
-        "op": "execute",
-        "target": "generation/approve",
-        "summary": "Approve and deploy the latest staged generation",
+        "summary": "Approve the pending generation and deploy to IRIS production.",
         "requiresApproval": true,
         "status": "pending-approval",
         "endpoint": "/generate/approve",
@@ -545,24 +540,13 @@
       "query": "Reject the currently staged generation and close it without deployment.",
       "pass": false,
       "checks": [
-        "target in [\"generate/reject\"] => actual 'generation/reject' : FAIL",
-        "requiresApproval=true => actual true : PASS",
-        "response includes any [\"reject\",\"without deployment\"] : FAIL",
+        "target in [\"generate/reject\"] => actual '' : FAIL",
+        "requiresApproval=true => actual false : FAIL",
+        "response includes any [\"reject\",\"without deployment\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nPending approval actions are ready for `/api/actions/approve`.",
-      "action": {
-        "id": "reject_generation",
-        "type": "reject_generation",
-        "op": "execute",
-        "target": "generation/reject",
-        "summary": "Reject the currently staged generation without deployment",
-        "requiresApproval": true,
-        "status": "pending-approval",
-        "endpoint": "/generate/reject",
-        "method": "POST",
-        "payload": {}
-      }
+      "responsePreview": "{\"mode\":\"actions\",\"response\":\"I will look up the latest staged (preview) generation ID, then ask for confirmation to reject it.\",\"actions\":[{\"id\":\"find-latest-staged-generation\",\"type\":\"sql_read\",\"op\":\"query\",\"target\":\"sql/select\",\"summary\":\"Find the most recent generation with status 'preview' to identify generationId.\",\"requiresApproval\":false,\"endpoint\":\"/sql\",\"method\":\"POST\",\"payload\":{\"args\":{\"query\":\"SELECT GenerationId, Status, Description, CreatedAt FROM AIAgent_Model.Generation WHERE St",
+      "action": {}
     },
     {
       "id": "RW24",
@@ -570,13 +554,28 @@
       "query": "Compile all newly generated classes and show errors if any.",
       "pass": false,
       "checks": [
-        "target in [\"plan/preview\"] => actual '' : FAIL",
+        "target in [\"plan/preview\"] => actual 'sql/select' : FAIL",
         "requiresApproval=false => actual false : PASS",
         "response includes any [\"compile\",\"errors\",\"classes\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "I can compile, but I don't have a direct compile action exposed in the action catalog. Please provide one of these so I can proceed:\n\n1. The **exact class list** to compile, plus the **approved compile utility/method** (if there's a policy‑approved class method for compilation).\n2. Confirmation that I should compile **the latest staged generation** and which API/method your environment uses for that.\n\nOnce you confirm, I'll run the compile and report any errors.",
-      "action": {}
+      "responsePreview": "Fetching the most recent generated classes so I can compile them. Once I return the class list, I'll ask for approval to run the compile and show any errors.\n\nExecution results:\n- Read action failed (sql/select): IRIS API error: 400 Bad Request",
+      "action": {
+        "id": "latest-generated-classes",
+        "type": "sql_read",
+        "op": "query",
+        "target": "sql/select",
+        "summary": "Get the latest generation and its classes to compile.",
+        "requiresApproval": false,
+        "status": "pending-approval",
+        "endpoint": "/sql",
+        "method": "POST",
+        "payload": {
+          "args": {
+            "query": "SELECT gc.ClassName, gc.ClassType, g.GenerationId, g.Description, g.CreatedAt FROM AIAgent_Model.GenerationClass gc JOIN AIAgent_Model.Generation g ON gc.GenerationId = g.GenerationId WHERE g.Status='preview' ORDER BY g.CreatedAt DESC"
+          }
+        }
+      }
     },
     {
       "id": "RW25",
@@ -591,7 +590,7 @@
       ],
       "responsePreview": "Execution plan prepared. No production changes were executed yet.\nHuman approval is required before deployment or runtime mutations.\nProposed actions:\n- Approve the pending generation and deploy to IRIS production.",
       "action": {
-        "id": "act-1771592431322-592",
+        "id": "act-1771603074033-632",
         "type": "approve_deploy_generation",
         "summary": "Approve the pending generation and deploy to IRIS production.",
         "requiresApproval": true,
@@ -612,13 +611,13 @@
         "response includes any [\"connected\",\"disabled\",\"router\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Pathology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- Lab ORM Router | En",
+      "responsePreview": "Checking production topology to confirm the new operation is referenced by router rules and that the host is currently disabled.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Pathology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport ",
       "action": {
-        "id": "prod_topology",
+        "id": "production-topology-check-router-and-disabled",
         "type": "production_topology",
         "op": "query",
         "target": "production/topology",
-        "summary": "Check whether the new operation is connected in router rules and currently disabled",
+        "summary": "Read production topology to verify router rule connections and host enabled/disabled status.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/production/topology",
@@ -634,16 +633,16 @@
       "checks": [
         "target in [\"plan/preview\"] => actual 'production/topology' : FAIL",
         "requiresApproval=false => actual false : PASS",
-        "response includes any [\"readiness\",\"A01\",\"A02\",\"A03\"] : FAIL",
+        "response includes any [\"readiness\",\"A01\",\"A02\",\"A03\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Pathology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- Lab ORM Router | En",
+      "responsePreview": "I will check topology, host status, and queue health to validate readiness without enabling the route. I will not start or enable any hosts.\n\nProduction hosts (73):\n- to.SCR eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Pathology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.SCR eImport Radiology | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.RMS eImport Oscopy | EnsLib.HL7.Operation.TCPOperation | Unknown | Disabled\n- to.",
       "action": {
-        "id": "prod_topology",
+        "id": "production-topology-readiness",
         "type": "production_topology",
         "op": "query",
         "target": "production/topology",
-        "summary": "Validate readiness for A01/A02/A03 traffic through the new route (check routing connections and disabled state)",
+        "summary": "Read production topology to confirm required hosts exist and are disabled as intended.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/production/topology",
@@ -655,23 +654,23 @@
       "id": "RW28",
       "title": "Queue spike investigation",
       "query": "Investigate why queue depth spiked in the last hour and identify likely bottleneck hosts.",
-      "pass": true,
+      "pass": false,
       "checks": [
-        "target in [\"production/queues\"] => actual 'production/queues' : PASS",
+        "target in [\"production/queues\"] => actual 'production/events' : FAIL",
         "requiresApproval=false => actual false : PASS",
         "response includes any [\"queue\",\"bottleneck\",\"host\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nNo queue rows were returned.\nRecent events (50):\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' is up-to-date.\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' updating...\n-  |  |  | Production 'NHSTIE2.Produ",
+      "responsePreview": "I will pull recent production events and current queue depths, then identify likely bottleneck hosts from the spike window.\n\nRecent events (50):\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' is up-to-date.\n-  |  |  | Production 'NHSTIE2.Production.OCSProduc",
       "action": {
-        "id": "queue_counts",
-        "type": "queue_counts",
+        "id": "events-last-hour",
+        "type": "event_log",
         "op": "query",
-        "target": "production/queues",
-        "summary": "Fetch current queue depths to identify bottleneck hosts",
+        "target": "production/events",
+        "summary": "Read recent production events to correlate queue spike causes.",
         "requiresApproval": false,
         "status": "executed",
-        "endpoint": "/production/queues",
+        "endpoint": "/production/events",
         "method": "GET",
         "payload": {}
       }
@@ -680,20 +679,20 @@
       "id": "RW29",
       "title": "Failed message triage",
       "query": "Show failed/retried message indicators for the last 2 hours and likely causes.",
-      "pass": false,
+      "pass": true,
       "checks": [
         "target in [\"production/events\"] => actual 'production/events' : PASS",
         "requiresApproval=false => actual false : PASS",
-        "response includes any [\"failed\",\"retried\",\"cause\"] : FAIL",
+        "response includes any [\"failed\",\"retried\",\"cause\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nRecent events (50):\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' is up-to-date.\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' updating...\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' updated.",
+      "responsePreview": "Fetching recent production events and current queue depths to identify failed/retried message indicators in the last 2 hours and likely causes.\n\nRecent events (50):\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | ERROR <Ens>ErrException: <DISCONNECT>zIsProductionRunning+1^Ens.Director.1 -- logged as '-' number - @''\n-  |  |  | Production 'NHSTIE2.Production.OCSProduction' is up-to-date.\n-  |  |  | Production 'NHSTIE2.",
       "action": {
-        "id": "event_log",
+        "id": "events-last-2-hours",
         "type": "event_log",
         "op": "query",
         "target": "production/events",
-        "summary": "Fetch recent production events to identify failed/retried indicators in last 2 hours",
+        "summary": "Read recent production events to filter failed/retried indicators in last 2 hours.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/production/events",
@@ -707,24 +706,13 @@
       "query": "Check whether runner health or bridge connectivity changed in the last 30 minutes.",
       "pass": false,
       "checks": [
-        "target in [\"production/status\"] => actual 'production/status' : PASS",
+        "target in [\"production/status\"] => actual '' : FAIL",
         "requiresApproval=false => actual false : PASS",
-        "response includes any [\"runner\",\"bridge\",\"health\"] : FAIL",
+        "response includes any [\"runner\",\"bridge\",\"health\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nProduction status:\n- Name: NHSTIE2.Production.OCSProduction\n- Status: Running\n- Namespace: DEMO2_AI2\n\nExecution results:\n- Production status: Running (NHSTIE2.Production.OCSProduction)",
-      "action": {
-        "id": "prod_status",
-        "type": "production_status",
-        "op": "query",
-        "target": "production/status",
-        "summary": "Check runner health or bridge connectivity changes in the last 30 minutes",
-        "requiresApproval": false,
-        "status": "executed",
-        "endpoint": "/production/status",
-        "method": "GET",
-        "payload": {}
-      }
+      "responsePreview": "{\"mode\":\"respond\",\"response\":\"I don't have a runner/bridge health endpoint in the current action catalog. If you can provide an endpoint or add a capability, I can check the last 30 minutes. Otherwise, tell me where runner health is logged (e.g., a lookup table or event source) and I'll query that.\",\"actions\":[]}",
+      "action": {}
     },
     {
       "id": "RW31",
@@ -739,7 +727,7 @@
       ],
       "responsePreview": "Execution plan prepared. No production changes were executed yet.\nHuman approval is required before deployment or runtime mutations.\nProposed actions:\n- Rollback production to a selected previous version snapshot.",
       "action": {
-        "id": "act-1771592471704-804",
+        "id": "act-1771603107607-116",
         "type": "rollback_version",
         "summary": "Rollback production to a selected previous version snapshot.",
         "requiresApproval": true,
@@ -757,16 +745,16 @@
       "checks": [
         "target in [\"lifecycle/rollback\"] => actual 'lifecycle/versions' : FAIL",
         "requiresApproval=true => actual false : FAIL",
-        "response includes any [\"rollback\",\"snapshot\"] : FAIL",
+        "response includes any [\"rollback\",\"snapshot\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "Action plan generated from your request.\n\nResult:\n```json\n[]\n```\n\nExecution results:\n- lifecycle/versions executed.",
+      "responsePreview": "I will look up the latest stable snapshot and then request approval to execute the rollback.\n\nResult:\n```json\n[]\n```\n\nExecution results:\n- lifecycle/versions executed.",
       "action": {
-        "id": "lifecycle_versions",
-        "type": "lifecycle_versions",
+        "id": "list-stable-snapshots",
+        "type": "lifecycle.versions.read",
         "op": "query",
         "target": "lifecycle/versions",
-        "summary": "List lifecycle versions to select previous stable snapshot for rollback",
+        "summary": "List available version snapshots to identify the previous stable one.",
         "requiresApproval": false,
         "status": "executed",
         "endpoint": "/lifecycle/versions",
@@ -785,7 +773,7 @@
         "response includes any [\"audit\",\"actions\",\"outcomes\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "{\"mode\":\"respond\",\"response\":\"No audit-trail action is available in the action catalog, so I cannot fetch an authoritative audit log. If you want, I can summarize the actions I proposed in this conversation from chat history. Tell me to proceed.\",\"actions\":[]}",
+      "responsePreview": "{\"mode\":\"actions\",\"response\":\"Fetching audit entries for this conversation and summarizing requested actions and outcomes. If you want a specific conversationId, provide it; otherwise I'll use the most recent conversation in this namespace.\",\"actions\":[{\"id\":\"audit-trail-conversation\",\"type\":\"sql_read\",\"op\":\"query\",\"target\":\"sql/select\",\"summary\":\"Read audit entries for the current conversation to list requested actions and outcomes.\",\"requiresApproval\":false,\"endpoint\":\"/sql\",\"method\":\"POST\",\"p",
       "action": {}
     },
     {
@@ -799,7 +787,7 @@
         "response includes any [\"CAB\",\"changes\",\"risks\"] : PASS",
         "response excludes [] : PASS"
       ],
-      "responsePreview": "{\"mode\":\"respond\",\"response\":\"CAB Summary (based on this conversation only; no live audit log available)\\n\\n**Change Type**\\n- Planned integration changes only. No confirmed deployments or applied production mutations in this session.\\n\\n**Planned/Proposed Changes**\\n1. PAS -> DrDoctor ADT A01/A02/A03 route\\n   - Add routing rules in existing PAS router for ADT A01/A02/A03\\n   - Add DTL transform for PAS ADT to DrDoctor format\\n   - Add new outbound business operation for DrDoctor\\n\\n2. PAS rout",
+      "responsePreview": "{\"mode\":\"actions\",\"response\":\"I will pull the latest audit entries and draft a CAB-ready summary of planned/applied integration changes and risks. If you want a specific change window, tell me the date/time range.\",\"actions\":[{\"id\":\"cab-audit-entries\",\"type\":\"sql_read\",\"op\":\"query\",\"target\":\"sql/select\",\"summary\":\"Fetch audit entries to summarize planned/applied changes and risks for CAB.\",\"requiresApproval\":false,\"endpoint\":\"/sql\",\"method\":\"POST\",\"payload\":{\"args\":{\"query\":\"SELECT Timestamp, Ac",
       "action": {}
     }
   ]

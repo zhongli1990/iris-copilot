@@ -1,7 +1,7 @@
-/**
+﻿/**
  * Master Orchestrator Agent.
  * Classifies user intent, selects the right AI runner, and coordinates
- * the multi-step workflow (requirements → design → generate → review).
+ * the multi-step workflow (requirements -> design -> generate -> review).
  *
  * Part of the IRIS AI Agent Platform (IRIS Copilot).
  */
@@ -347,6 +347,27 @@ export class Orchestrator {
             actionExecution: { mode: 'direct-read', executedCount: 1 },
           };
         } catch (err) {
+          if (parsedGeneric.action.type === 'class_meta_read' && parsedGeneric.action.target?.startsWith('classmeta/')) {
+            try {
+              const className = parsedGeneric.action.target.substring('classmeta/'.length);
+              const fallback = await this.irisClient.readClass(className);
+              const data = this.unwrapData(fallback);
+              const block = this.buildReadResponseBlock(parsedGeneric.action.type, parsedGeneric.action.target, data, input.message);
+              return {
+                response: block || `Class metadata fallback succeeded for ${className}.`,
+                agent: 'orchestrator/action-broker',
+                runner: 'orchestrator-action-broker',
+                actions: [{
+                  ...parsedGeneric.action,
+                  requiresApproval: false,
+                  status: 'executed',
+                }],
+                actionExecution: { mode: 'direct-read', executedCount: 1 },
+              };
+            } catch {
+              // Fall through to generic error response.
+            }
+          }
           return {
             response: `I could not execute the requested operation. Error: ${err instanceof Error ? err.message : String(err)}`,
             agent: 'orchestrator/action-broker',
@@ -672,7 +693,7 @@ export class Orchestrator {
 
     const classMetaMatch = text.match(/\b(?:class\s+metadata\s+for|metadata\s+for\s+class|metadata\s+for|class)\s+([A-Za-z0-9_.%]+)/i);
     if (/\bmetadata\b/.test(lower) && classMetaMatch) {
-      const className = classMetaMatch[1];
+      const className = classMetaMatch[1].replace(/[.,;:!?]+$/g, '');
       return {
         dryRun: false,
         action: {
@@ -722,7 +743,9 @@ export class Orchestrator {
     }
 
     const hostNameMatch = text.match(/\b(?:named|called)\s+([A-Za-z0-9_.-]+)/i);
-    if (/\badd\b.*\bbusiness host\b/.test(lower) && hostNameMatch) {
+    const wantsHostMutation = /\b(add|create|new)\b.*\bbusiness (host|service|process|operation)\b/.test(lower)
+      || /\bbusiness (host|service|process|operation)\b.*\b(add|create|new)\b/.test(lower);
+    if (wantsHostMutation && hostNameMatch) {
       const hostName = hostNameMatch[1];
       let className = 'Ens.BusinessService';
       if (/\bbusiness process\b|\bprocess\b/.test(lower)) className = 'Ens.BusinessProcessBPL';
@@ -1299,8 +1322,8 @@ const ACTION_CATALOG: ActionCatalogEntry[] = [
   { type: 'class_meta_read', op: 'query', target: 'classmeta/AIAgent.API.Dispatcher', endpoint: '/operate', method: 'POST', requiresApproval: false, description: 'Read class metadata (set target to classmeta/<ClassName>)' },
   { type: 'invoke_policy_read', op: 'discover', target: 'invoke-policy', endpoint: '/operate', method: 'POST', requiresApproval: false, description: 'Read invoke policy guards' },
   { type: 'sql_read', op: 'query', target: 'sql/select', endpoint: '/sql', method: 'POST', requiresApproval: false, description: 'Run read-only SQL SELECT via generic operate args.query' },
-  { type: 'approve_deploy_generation', op: 'execute', target: 'generation/approve', endpoint: '/generate/approve', method: 'POST', requiresApproval: true, description: 'Approve and deploy a generated change set' },
-  { type: 'reject_generation', op: 'execute', target: 'generation/reject', endpoint: '/generate/reject', method: 'POST', requiresApproval: true, description: 'Reject a generated change set' },
+  { type: 'approve_deploy_generation', op: 'execute', target: 'generate/approve', endpoint: '/generate/approve', method: 'POST', requiresApproval: true, description: 'Approve and deploy a generated change set' },
+  { type: 'reject_generation', op: 'execute', target: 'generate/reject', endpoint: '/generate/reject', method: 'POST', requiresApproval: true, description: 'Reject a generated change set' },
   { type: 'rollback_version', op: 'execute', target: 'lifecycle/rollback', endpoint: '/lifecycle/rollback/:id', method: 'POST', requiresApproval: true, description: 'Rollback to a version snapshot' },
   { type: 'start_production', op: 'execute', target: 'production/start', endpoint: '/production/start', method: 'POST', requiresApproval: true, description: 'Start production' },
   { type: 'stop_production', op: 'execute', target: 'production/stop', endpoint: '/production/stop', method: 'POST', requiresApproval: true, description: 'Stop production' },
@@ -1328,11 +1351,11 @@ const NEW_INTEGRATION_PROMPT = `
 
 The user wants to create a new clinical integration. Follow this workflow:
 
-1. **Understand the requirement** — What system sends what message to what target?
-2. **Ask clarifying questions** — HL7 version/fields, ports, business rules, error handling
-3. **Design the topology** — Which components are needed (BS/BP/BO/Router/DTL/LUT)?
-4. **Show how it connects** — Map to existing production hosts
-5. **Generate code** — Produce complete, compilable ObjectScript classes
+1. **Understand the requirement** -- What system sends what message to what target?
+2. **Ask clarifying questions** -- HL7 version/fields, ports, business rules, error handling
+3. **Design the topology** -- Which components are needed (BS/BP/BO/Router/DTL/LUT)?
+4. **Show how it connects** -- Map to existing production hosts
+5. **Generate code** -- Produce complete, compilable ObjectScript classes
 
 When you are ready to generate code, output COMPLETE ObjectScript class definitions.
 Each class should be a full, compilable definition starting with "Class" and ending with "}".
@@ -1385,3 +1408,4 @@ The user wants to undo a previous deployment. Guide them through:
 - Which version to roll back to
 - What classes will be restored/removed
 - Impact on the running production`;
+

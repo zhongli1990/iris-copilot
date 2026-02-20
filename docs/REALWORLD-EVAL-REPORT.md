@@ -69,3 +69,56 @@ Generated from:
 3. Enforce strict dry-run semantics: no approval for dry-run, ever.
 4. Add generic compile/audit/CAB action endpoints for enterprise lifecycle governance.
 5. Complete rollback executor with approval-gated snapshot selection and execution.
+
+## Design Proposal For Generic Lifecycle Execution
+
+### Goal
+- Move from "good operational read assistant" to "generic approval-gated lifecycle executor" that can handle planning, generation, validation, deployment, and rollback from natural language.
+
+### Proposed Architecture Changes
+
+1. Add `plan/preview` as a first-class executable action.
+- Input: user intent + discovered namespace/production context.
+- Output: structured change plan object:
+  - `scope`
+  - `affectedArtifacts`
+  - `riskLevel`
+  - `preChecks`
+  - `executionSteps`
+  - `rollbackPlan`
+- Cases addressed: RW16, RW17, RW18, RW20, RW21, RW24, RW25, RW27, RW33, RW34.
+
+2. Introduce a `tool-chain` execution graph (not single-action fallback).
+- Allow planner to return ordered action graph:
+  - read topology -> read routing rules -> draft delta -> compile check -> approval gate.
+- Add deterministic validator that rejects incomplete action graphs before execution.
+- Cases addressed: RW16-RW21, RW24-RW25.
+
+3. Standardize action identity and routing.
+- Canonical targets only (`generate/approve`, `generate/reject`, `lifecycle/rollback`).
+- Add target alias table for backwards compatibility.
+- Cases addressed: RW22, RW23.
+
+4. Separate dry-run policy from mutation policy.
+- Rule: if `dryRun=true`, action is always non-mutating and `requiresApproval=false`.
+- Rule engine enforces this centrally before action dispatch.
+- Cases addressed: RW19, RW20.
+
+5. Add generic governance endpoints.
+- `query/audit/conversation/<id>`
+- `query/cab/summary`
+- `execute/compile/classes`
+- `execute/validate/checklist`
+- Cases addressed: RW24, RW25, RW33, RW34.
+
+6. Complete rollback orchestration as explicit 2-step flow.
+- Step A: `lifecycle/versions` with stable snapshot ranking.
+- Step B: `lifecycle/rollback/<id>` approval-gated execute.
+- Cases addressed: RW31, RW32.
+
+### Delivery Plan (Phased)
+
+1. Phase A (short): action normalization + dry-run enforcement + class metadata fallback hardening.
+2. Phase B (core): implement `plan/preview` contract + graph executor.
+3. Phase C (governance): compile/audit/CAB/checklist endpoints and runner-neutral tool adapters.
+4. Phase D (quality): rerun RW01-RW34 gate with target >= 85% pass before release.
