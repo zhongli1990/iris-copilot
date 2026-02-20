@@ -1,5 +1,7 @@
 ﻿# IRIS Copilot
 
+[Vision Article: IRIS Copilot Prototype - English (etc.) as IRIS Language](https://community.intersystems.com/post/iris-copilot-prototype-english-etc-iris-language)
+
 Human natural language-driven AI platform for InterSystems IRIS HealthConnect TIE implementation lifecycles.
 
 This project is built for NHS Trust integration delivery: users describe clinical integration requirements in natural language, Copilot designs and generates IRIS artifacts, and deployment is executed only after explicit human approval.
@@ -114,4 +116,5 @@ This project is licensed under the **MIT License**.
 See `LICENSE` for the full license text.
 
 Copyright (c) Lightweight Integration Limited.
+
 
