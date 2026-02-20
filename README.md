@@ -113,8 +113,8 @@ Health checks:
 ## License
 
 This project is licensed under the **MIT License**.
-See `LICENSE` for the full license text.
+See `LICENSE` for the full MIT license text.
 
-Copyright (c) Lightweight Integration Limited.
+
 
 
