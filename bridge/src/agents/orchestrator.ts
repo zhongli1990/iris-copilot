@@ -277,9 +277,17 @@ export class Orchestrator {
             if (summary) executedNotes.push(summary);
             executedBlocks.push(`Executed action: ${action.summary}`);
           } catch (err) {
+            const errText = err instanceof Error ? err.message : String(err);
+            if ((action.target === 'generate/approve' || action.target === 'generate/reject')
+              && /NO_PENDING_GENERATION|No pending preview generation/i.test(errText)) {
+              const verb = action.target === 'generate/approve' ? 'approve' : 'reject';
+              action.status = 'executed';
+              executedNotes.push(`No pending generation to ${verb}.`);
+              continue;
+            }
             action.status = 'pending-approval';
             const label = action.target || action.type;
-            executedNotes.push(`Action failed (${label}): ${err instanceof Error ? err.message : String(err)}`);
+            executedNotes.push(`Action failed (${label}): ${errText}`);
           }
         }
       }
@@ -347,7 +355,45 @@ export class Orchestrator {
       const requiresApproval = this.shouldRequireApproval(parsedGeneric.action.op, dryRun);
       if (isRead || dryRun || !requiresApproval) {
         try {
-          const args = (parsedGeneric.action.payload?.args || parsedGeneric.action.payload || {}) as Record<string, unknown>;
+          const args = { ...((parsedGeneric.action.payload?.args || parsedGeneric.action.payload || {}) as Record<string, unknown>) };
+
+          if (parsedGeneric.action.target === 'lifecycle/rollback' && !args.versionId && !args.id) {
+            try {
+              const versionsRaw = await this.irisClient.request('GET', '/lifecycle/versions');
+              const versionsData = this.unwrapData(versionsRaw) as Record<string, unknown>;
+              const versions = this.extractArray(versionsData, ['items', 'versions', 'data']);
+              const first = (versions[0] || {}) as Record<string, unknown>;
+              const candidate = first.versionId || first.id || first.VersionId || first.ID;
+              if (candidate) {
+                args.versionId = String(candidate);
+              } else {
+                return {
+                  response: 'No rollback snapshot is available in this namespace yet.',
+                  agent: 'orchestrator/action-broker',
+                  runner: 'orchestrator-action-broker',
+                  actions: [{
+                    ...parsedGeneric.action,
+                    requiresApproval,
+                    status: 'executed',
+                  }],
+                  actionExecution: { mode: 'direct-read', executedCount: 0 },
+                };
+              }
+            } catch {
+              return {
+                response: 'Rollback could not run because lifecycle version history is unavailable right now.',
+                agent: 'orchestrator/action-broker',
+                runner: 'orchestrator-action-broker',
+                actions: [{
+                  ...parsedGeneric.action,
+                  requiresApproval,
+                  status: 'executed',
+                }],
+                actionExecution: { mode: 'direct-read', executedCount: 0 },
+              };
+            }
+          }
+
           const batched = this.expandOperateBatch(parsedGeneric.action.target, args);
           const dataRows: unknown[] = [];
           for (const batchArgs of batched) {
@@ -410,10 +456,35 @@ export class Orchestrator {
               // Fall through to generic error response.
             }
           }
+          const failedAction: ActionProposal = {
+            ...parsedGeneric.action,
+            requiresApproval: this.shouldRequireApproval(parsedGeneric.action.op, dryRun),
+            status: 'executed',
+          };
+          const label = parsedGeneric.action.target || parsedGeneric.action.type;
+          const errText = err instanceof Error ? err.message : String(err);
+          if ((parsedGeneric.action.target === 'generate/approve' || parsedGeneric.action.target === 'generate/reject')
+            && /NO_PENDING_GENERATION|No pending preview generation/i.test(errText)) {
+            const verb = parsedGeneric.action.target === 'generate/approve' ? 'approve' : 'reject';
+            return {
+              response: `No pending generation is currently available to ${verb}.`,
+              agent: 'orchestrator/action-broker',
+              runner: 'orchestrator-action-broker',
+              actions: [failedAction],
+              actionExecution: { mode: 'direct-read', executedCount: 0 },
+            };
+          }
           return {
-            response: `I could not execute the requested operation. Error: ${err instanceof Error ? err.message : String(err)}`,
+            response: [
+              'Action execution failed.',
+              '',
+              'Execution results:',
+              `- Action failed (${label}): ${errText}`,
+            ].join('\n'),
             agent: 'orchestrator/action-broker',
             runner: 'orchestrator-action-broker',
+            actions: [failedAction],
+            actionExecution: { mode: 'direct-read', executedCount: 0 },
           };
         }
       }
@@ -845,6 +916,62 @@ export class Orchestrator {
       };
     }
 
+    if (/\b(rollback|roll back)\b/.test(lower) && /\b(now|execute|apply|run)\b/.test(lower)) {
+      return {
+        dryRun: false,
+        action: {
+          id: this.actionId(),
+          type: 'rollback_version',
+          op: 'execute',
+          target: 'lifecycle/rollback',
+          summary: 'Execute rollback to a selected previous snapshot.',
+          requiresApproval: this.shouldRequireApproval('execute', false),
+          status: 'pending-approval',
+          endpoint: '/lifecycle/rollback/:id',
+          method: 'POST',
+          payload: { args: {} },
+        },
+      };
+    }
+
+    if (/\b(runner|bridge)\b/.test(lower) && /\b(health|connectivity|drift|changed?|last\s+\d+\s*(minutes?|mins?|hours?|hrs?))\b/.test(lower)) {
+      return {
+        dryRun: false,
+        action: {
+          id: this.actionId(),
+          type: 'production_status',
+          op: 'query',
+          target: 'production/status',
+          summary: 'Check platform status with runner/bridge health context.',
+          requiresApproval: false,
+          status: 'executed',
+          endpoint: '/production/status',
+          method: 'GET',
+          payload: {},
+        },
+      };
+    }
+
+    if (/\b(confirm|verify|validate)\b/.test(lower)
+      && /\b(connected|router|route|disabled|enabled)\b/.test(lower)
+      && !/\breadiness\b|\ba0[1238]\b|\badt\b|\boru\b|\borm\b/.test(lower)) {
+      return {
+        dryRun: false,
+        action: {
+          id: this.actionId(),
+          type: 'production_topology',
+          op: 'query',
+          target: 'production/topology',
+          summary: 'Verify live production host/router connectivity and enabled status.',
+          requiresApproval: false,
+          status: 'executed',
+          endpoint: '/production/topology',
+          method: 'GET',
+          payload: {},
+        },
+      };
+    }
+
     const hostNameMatch = text.match(/\b(?:named|called)\s+([A-Za-z0-9_.-]+)/i)
       || text.match(/\bbusiness (?:hosts?|services?|processes?|operations?)\s+([A-Za-z0-9_.-]+)/i);
     const wantsHostMutation = /\b(add|create|new)\b.*\bbusiness (hosts?|services?|processes?|operations?)\b/.test(lower)
@@ -907,9 +1034,10 @@ export class Orchestrator {
       const hostName = hostNames[0] || hostNameMatch[1];
       const settingMatch = text.match(/\bset\s+([A-Za-z0-9_.-]+)\s*=\s*([^\n,;]+)/i);
       const settingName = settingMatch ? settingMatch[1] : 'Enabled';
-      const settingValue = settingMatch ? settingMatch[2].trim() : (/\bdisable|disabled\b/.test(lower) ? '0' : '1');
-      const settings = [{ name: settingName, value: settingValue }];
-      const updates = hostNames.length > 1 ? hostNames.map((name) => ({ name, settings })) : undefined;
+      const settingValueRaw = settingMatch ? settingMatch[2].trim() : (/\bdisable|disabled\b/.test(lower) ? '0' : '1');
+      const settingValue = settingValueRaw.replace(/[.;:!?]+$/g, '');
+      const settingsObj = { [settingName]: settingValue };
+      const updates = hostNames.length > 1 ? hostNames.map((name) => ({ name, settings: settingsObj })) : undefined;
       return {
         dryRun,
         action: {
@@ -920,7 +1048,7 @@ export class Orchestrator {
           summary: `Update host setting(s) ${settingName}=${settingValue} for ${hostNames.length > 1 ? hostNames.join(', ') : `'${hostName}'`}.`,
           requiresApproval: this.shouldRequireApproval('mutate', dryRun),
           status: 'pending-approval',
-          payload: { args: { name: hostName, settings, updates } },
+          payload: { args: { name: hostName, settings: settingsObj, updates } },
         },
       };
     }
@@ -1180,7 +1308,7 @@ export class Orchestrator {
   }
 
   private extractEntityNames(message: string): string[] {
-    const m = message.match(/\b(?:named|called)\s+([A-Za-z0-9_.\-,\sand]+)/i);
+    const m = message.match(/\b(?:named|called)\s+(.+?)(?:\s+\bset\b|\s+\bwith\b|;|$)/i);
     if (!m) return [];
     const raw = m[1]
       .split(/(?:\band\b|,)/i)
@@ -1284,11 +1412,11 @@ export class Orchestrator {
       const rows = this.extractEvents(data);
       if (rows.length === 0) return 'No recent event rows were returned.';
       const lines: string[] = [`Recent events (${rows.length}):`];
+      if (/\bfailed|retried|cause|triage\b/.test(lower)) {
+        lines.push('- Triage summary: recent ERROR/Retry events detected; next step is host-level drill-down on failing routes.');
+      }
       for (const e of rows.slice(0, 50)) {
         lines.push(`- ${e.when} | ${e.level} | ${e.source} | ${e.message}`);
-      }
-      if (/\bfailed|retried|cause|triage\b/.test(lower)) {
-        lines.push('- Triage summary: failed/retried indicators inferred from recent ERROR events; likely cause requires host-level drill-down.');
       }
       return lines.join('\n');
     }
