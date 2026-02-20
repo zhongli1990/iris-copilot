@@ -1,381 +1,701 @@
 {
-  "version": "0.1.3",
-  "namespace": "DEMO2_AI2",
-  "runner": "openai-codex-sdk",
-  "cases": [
-    {
-      "id": "RW01",
-      "title": "Production topology full detail",
-      "query": "List all production hosts with full details.",
-      "expected": {
-        "actionTargetAny": ["production/topology"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Production hosts (", "Current production has"],
-        "responseNotIncludes": ["Prepare integration change plan"]
-      }
-    },
-    {
-      "id": "RW02",
-      "title": "Queue depth overview",
-      "query": "Show queue depth for all hosts.",
-      "expected": {
-        "actionTargetAny": ["production/queues"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Queue counts", "Current queue counts", "No queue rows were returned."],
-        "responseNotIncludes": ["Prepare integration change plan"]
-      }
-    },
-    {
-      "id": "RW03",
-      "title": "Recent production events",
-      "query": "Show recent production events.",
-      "expected": {
-        "actionTargetAny": ["production/events"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Recent events", "Recent production events"],
-        "responseNotIncludes": ["Prepare integration change plan"]
-      }
-    },
-    {
-      "id": "RW04",
-      "title": "Lookup table content",
-      "query": "Show lookup table ErrorCodes content.",
-      "expected": {
-        "actionTargetAny": ["lookup/ErrorCodes"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Lookup table ErrorCodes", "has no entries"],
-        "responseNotIncludes": ["Prepare integration change plan"]
-      }
-    },
-    {
-      "id": "RW05",
-      "title": "Class metadata query",
-      "query": "Show metadata for class AIAgent.API.Dispatcher.",
-      "expected": {
-        "actionTargetAny": ["classmeta/AIAgent.API.Dispatcher"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Class metadata:", "Methods:"],
-        "responseNotIncludes": ["Prepare integration change plan"]
-      }
-    },
-    {
-      "id": "RW06",
-      "title": "Invocation policy query",
-      "query": "Show invocation policy.",
-      "expected": {
-        "actionTargetAny": ["invoke-policy"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Invocation policy:", "Mode:"],
-        "responseNotIncludes": ["Prepare integration change plan"]
-      }
-    },
-    {
-      "id": "RW07",
-      "title": "Class catalog by package pattern",
-      "query": "List classes in the NHSTIE2.* packages.",
-      "expected": {
-        "actionTargetAny": ["dictionary/classes"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Classes (", "Dictionary class catalog read"],
-        "responseNotIncludes": ["Prepare integration change plan"]
-      }
-    },
-    {
-      "id": "RW08",
-      "title": "Dry-run add disabled host",
-      "query": "Create a plan to add a disabled test business host named AIAgent.DryRun.TestHost, dry-run only.",
-      "expected": {
-        "actionTargetAny": ["production/host/add"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Dry-run executed", "\"dry_run\""],
-        "responseNotIncludes": ["Prepare integration change plan"]
-      }
-    },
-    {
-      "id": "RW09",
-      "title": "Apply add host requires approval",
-      "query": "Add a disabled test business host named AIAgent.DryRun.TestHost.",
-      "expected": {
-        "actionTargetAny": ["production/host/add"],
-        "requiresApproval": true,
-        "responseIncludesAny": ["Execution plan prepared", "Human approval is required"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW10",
-      "title": "Dry-run remove host",
-      "query": "Remove business host named AIAgent.DryRun.TestHost, dry-run only.",
-      "expected": {
-        "actionTargetAny": ["production/host/remove"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Dry-run executed", "\"dry_run\""],
-        "responseNotIncludes": ["Prepare integration change plan"]
-      }
-    },
-    {
-      "id": "RW11",
-      "title": "Platform health snapshot",
-      "query": "Recap current platform health, active production, and runner status.",
-      "expected": {
-        "actionTargetAny": ["production/status"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Production status", "Runner health", "Bridge"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW12",
-      "title": "Production host names only",
-      "query": "List all production host names only.",
-      "expected": {
-        "actionTargetAny": ["production/topology"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Production hosts (", "host(s)"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW13",
-      "title": "Disabled host inventory",
-      "query": "Show all currently disabled business hosts.",
-      "expected": {
-        "actionTargetAny": ["production/topology"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["disabled", "host"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW14",
-      "title": "Recent error events",
-      "query": "Show recent production events with level ERROR in the last 60 minutes.",
-      "expected": {
-        "actionTargetAny": ["production/events"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Recent events", "No recent event rows were returned."],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW15",
-      "title": "Queue hotspots",
-      "query": "Which 10 hosts have the highest queue depth right now?",
-      "expected": {
-        "actionTargetAny": ["production/queues"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Queue counts", "No queue rows were returned."],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW16",
-      "title": "New interface design plan",
-      "query": "Design an interface plan for ADT A01/A02/A03 from PAS to DrDoctor with required transforms and routing.",
-      "expected": {
-        "actionTargetAny": ["plan/preview"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["plan", "A01", "A02", "A03"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW17",
-      "title": "Existing router change plan",
-      "query": "Create a change plan to add a new downstream operation to the current PAS router for A08 messages only.",
-      "expected": {
-        "actionTargetAny": ["plan/preview"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["plan", "A08", "router"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW18",
-      "title": "DTL impact assessment",
-      "query": "Assess impact of changing PID-3 mapping in the existing PAS ADT transform.",
-      "expected": {
-        "actionTargetAny": ["plan/preview"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["impact", "PID-3", "transform"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW19",
-      "title": "Generate business operation dry-run",
-      "query": "Create a dry-run plan for a new disabled business operation AIAgent.Generated.DrDoctor.Operation.",
-      "expected": {
-        "actionTargetAny": ["production/host/add"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["Dry-run", "disabled", "business operation"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW20",
-      "title": "Generate router rule delta dry-run",
-      "query": "Prepare dry-run router rule updates to route ORM messages to a new operation.",
-      "expected": {
-        "actionTargetAny": ["plan/preview"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["dry-run", "ORM", "route"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW21",
-      "title": "Generate with approval gate",
-      "query": "Generate and stage required classes for a new ORU pathway; do not deploy until I approve.",
-      "expected": {
-        "actionTargetAny": ["plan/preview"],
-        "requiresApproval": true,
-        "responseIncludesAny": ["approve", "stage", "ORU"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW22",
-      "title": "Approve pending generation deploy",
-      "query": "Approve the latest staged generation and deploy it now.",
-      "expected": {
-        "actionTargetAny": ["generate/approve"],
-        "requiresApproval": true,
-        "responseIncludesAny": ["approve", "deploy"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW23",
-      "title": "Reject pending generation",
-      "query": "Reject the currently staged generation and close it without deployment.",
-      "expected": {
-        "actionTargetAny": ["generate/reject"],
-        "requiresApproval": true,
-        "responseIncludesAny": ["reject", "without deployment"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW24",
-      "title": "Compile validation",
-      "query": "Compile all newly generated classes and show errors if any.",
-      "expected": {
-        "actionTargetAny": ["plan/preview"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["compile", "errors", "classes"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW25",
-      "title": "Post-deploy smoke checklist",
-      "query": "Run post-deploy verification checklist for the new route and summarize pass/fail.",
-      "expected": {
-        "actionTargetAny": ["plan/preview"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["checklist", "pass", "fail"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW26",
-      "title": "Route presence verification",
-      "query": "Confirm the new operation is connected in router rules and currently disabled.",
-      "expected": {
-        "actionTargetAny": ["production/topology"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["connected", "disabled", "router"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW27",
-      "title": "Message flow readiness",
-      "query": "Validate readiness for A01/A02/A03 traffic through the new route without enabling it.",
-      "expected": {
-        "actionTargetAny": ["plan/preview"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["readiness", "A01", "A02", "A03"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW28",
-      "title": "Queue spike investigation",
-      "query": "Investigate why queue depth spiked in the last hour and identify likely bottleneck hosts.",
-      "expected": {
-        "actionTargetAny": ["production/queues"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["queue", "bottleneck", "host"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW29",
-      "title": "Failed message triage",
-      "query": "Show failed/retried message indicators for the last 2 hours and likely causes.",
-      "expected": {
-        "actionTargetAny": ["production/events"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["failed", "retried", "cause"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW30",
-      "title": "Runner platform drift check",
-      "query": "Check whether runner health or bridge connectivity changed in the last 30 minutes.",
-      "expected": {
-        "actionTargetAny": ["production/status"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["runner", "bridge", "health"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW31",
-      "title": "Prepare rollback plan",
-      "query": "Prepare rollback plan to previous stable version for the latest deployment, no execution.",
-      "expected": {
-        "actionTargetAny": ["lifecycle/rollback"],
-        "requiresApproval": true,
-        "responseIncludesAny": ["rollback", "plan", "no execution"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW32",
-      "title": "Execute rollback approval gated",
-      "query": "Rollback to the previous stable snapshot now.",
-      "expected": {
-        "actionTargetAny": ["lifecycle/rollback"],
-        "requiresApproval": true,
-        "responseIncludesAny": ["rollback", "snapshot"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW33",
-      "title": "Audit trail by conversation",
-      "query": "Show the audit trail for this conversation including requested actions and outcomes.",
-      "expected": {
-        "actionTargetAny": ["plan/preview"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["audit", "actions", "outcomes"],
-        "responseNotIncludes": []
-      }
-    },
-    {
-      "id": "RW34",
-      "title": "CAB ready summary",
-      "query": "Produce CAB-ready summary of planned/applied integration changes and risks.",
-      "expected": {
-        "actionTargetAny": ["plan/preview"],
-        "requiresApproval": false,
-        "responseIncludesAny": ["CAB", "changes", "risks"],
-        "responseNotIncludes": []
-      }
-    }
-  ]
+    "version":  "0.1.4-demo",
+    "namespace":  "DEMO2_AI2",
+    "runner":  "openai-codex-sdk",
+    "cases":  [
+                  {
+                      "id":  "RW01",
+                      "title":  "Production topology full detail",
+                      "query":  "List all production hosts with full details.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/topology"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Production hosts (",
+                                                                   "Current production has"
+                                                               ],
+                                       "responseNotIncludes":  [
+                                                                   "Prepare integration change plan"
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW02",
+                      "title":  "Queue depth overview",
+                      "query":  "Show queue depth for all hosts.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/queues"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Queue counts",
+                                                                   "Current queue counts",
+                                                                   "No queue rows were returned."
+                                                               ],
+                                       "responseNotIncludes":  [
+                                                                   "Prepare integration change plan"
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW03",
+                      "title":  "Recent production events",
+                      "query":  "Show recent production events.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/events"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Recent events",
+                                                                   "Recent production events"
+                                                               ],
+                                       "responseNotIncludes":  [
+                                                                   "Prepare integration change plan"
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW04",
+                      "title":  "Lookup table content",
+                      "query":  "Show lookup table ErrorCodes content.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "lookup/ErrorCodes"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Lookup table ErrorCodes",
+                                                                   "has no entries"
+                                                               ],
+                                       "responseNotIncludes":  [
+                                                                   "Prepare integration change plan"
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW05",
+                      "title":  "Class metadata query",
+                      "query":  "Show metadata for class AIAgent.API.Dispatcher.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "classmeta/AIAgent.API.Dispatcher"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Class metadata:",
+                                                                   "Methods:"
+                                                               ],
+                                       "responseNotIncludes":  [
+                                                                   "Prepare integration change plan"
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW06",
+                      "title":  "Invocation policy query",
+                      "query":  "Show invocation policy.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "invoke-policy"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Invocation policy:",
+                                                                   "Mode:"
+                                                               ],
+                                       "responseNotIncludes":  [
+                                                                   "Prepare integration change plan"
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW07",
+                      "title":  "Class catalog by package pattern",
+                      "query":  "List classes in the NHSTIE2.* packages.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "dictionary/classes"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Classes (",
+                                                                   "Dictionary class catalog read"
+                                                               ],
+                                       "responseNotIncludes":  [
+                                                                   "Prepare integration change plan"
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW08",
+                      "title":  "Dry-run add disabled host",
+                      "query":  "Create a plan to add a disabled test business host named AIAgent.DryRun.TestHost, dry-run only.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/host/add"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Dry-run executed",
+                                                                   "\"dry_run\""
+                                                               ],
+                                       "responseNotIncludes":  [
+                                                                   "Prepare integration change plan"
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW09",
+                      "title":  "Apply add host requires approval",
+                      "query":  "Add a disabled test business host named AIAgent.DryRun.TestHost.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/host/add"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Action executed",
+                                                                   "Execution results",
+                                                                   "Add host"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW10",
+                      "title":  "Dry-run remove host",
+                      "query":  "Remove business host named AIAgent.DryRun.TestHost, dry-run only.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/host/remove"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Dry-run executed",
+                                                                   "\"dry_run\""
+                                                               ],
+                                       "responseNotIncludes":  [
+                                                                   "Prepare integration change plan"
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW11",
+                      "title":  "Platform health snapshot",
+                      "query":  "Recap current platform health, active production, and runner status.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/status"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Production status",
+                                                                   "Runner health",
+                                                                   "Bridge"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW12",
+                      "title":  "Production host names only",
+                      "query":  "List all production host names only.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/topology"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Production hosts (",
+                                                                   "host(s)"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW13",
+                      "title":  "Disabled host inventory",
+                      "query":  "Show all currently disabled business hosts.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/topology"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "disabled",
+                                                                   "host"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW14",
+                      "title":  "Recent error events",
+                      "query":  "Show recent production events with level ERROR in the last 60 minutes.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/events"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Recent events",
+                                                                   "No recent event rows were returned."
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW15",
+                      "title":  "Queue hotspots",
+                      "query":  "Which 10 hosts have the highest queue depth right now?",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/queues"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Queue counts",
+                                                                   "No queue rows were returned."
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW16",
+                      "title":  "New interface design plan",
+                      "query":  "Design an interface plan for ADT A01/A02/A03 from PAS to DrDoctor with required transforms and routing.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "plan/preview"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "plan",
+                                                                   "A01",
+                                                                   "A02",
+                                                                   "A03"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW17",
+                      "title":  "Existing router change plan",
+                      "query":  "Create a change plan to add a new downstream operation to the current PAS router for A08 messages only.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "plan/preview"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "plan",
+                                                                   "A08",
+                                                                   "router"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW18",
+                      "title":  "DTL impact assessment",
+                      "query":  "Assess impact of changing PID-3 mapping in the existing PAS ADT transform.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "plan/preview"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "impact",
+                                                                   "PID-3",
+                                                                   "transform"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW19",
+                      "title":  "Generate business operation dry-run",
+                      "query":  "Create a dry-run plan for a new disabled business operation AIAgent.Generated.DrDoctor.Operation.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/host/add"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Dry-run",
+                                                                   "disabled",
+                                                                   "business operation"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW20",
+                      "title":  "Generate router rule delta dry-run",
+                      "query":  "Prepare dry-run router rule updates to route ORM messages to a new operation.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "plan/preview"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "dry-run",
+                                                                   "ORM",
+                                                                   "route"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW21",
+                      "title":  "Generate with approval gate",
+                      "query":  "Generate and stage required classes for a new ORU pathway; do not deploy until I approve.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "plan/preview"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Execution plan preview generated",
+                                                                   "Plan:",
+                                                                   "ORU"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW22",
+                      "title":  "Approve pending generation deploy",
+                      "query":  "Approve the latest staged generation and deploy it now.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "generate/approve"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "approve",
+                                                                   "deploy",
+                                                                   "Execution"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW23",
+                      "title":  "Reject pending generation",
+                      "query":  "Reject the currently staged generation and close it without deployment.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "generate/reject"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "reject",
+                                                                   "without deployment",
+                                                                   "Execution"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW24",
+                      "title":  "Compile validation",
+                      "query":  "Compile all newly generated classes and show errors if any.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "plan/preview"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "compile",
+                                                                   "errors",
+                                                                   "classes"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW25",
+                      "title":  "Post-deploy smoke checklist",
+                      "query":  "Run post-deploy verification checklist for the new route and summarize pass/fail.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "plan/preview"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "checklist",
+                                                                   "pass",
+                                                                   "fail"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW26",
+                      "title":  "Route presence verification",
+                      "query":  "Confirm the new operation is connected in router rules and currently disabled.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/topology"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "connected",
+                                                                   "disabled",
+                                                                   "router"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW27",
+                      "title":  "Message flow readiness",
+                      "query":  "Validate readiness for A01/A02/A03 traffic through the new route without enabling it.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "plan/preview"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "readiness",
+                                                                   "A01",
+                                                                   "A02",
+                                                                   "A03"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW28",
+                      "title":  "Queue spike investigation",
+                      "query":  "Investigate why queue depth spiked in the last hour and identify likely bottleneck hosts.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/queues"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "queue",
+                                                                   "bottleneck",
+                                                                   "host"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW29",
+                      "title":  "Failed message triage",
+                      "query":  "Show failed/retried message indicators for the last 2 hours and likely causes.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/events"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "failed",
+                                                                   "retried",
+                                                                   "cause"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW30",
+                      "title":  "Runner platform drift check",
+                      "query":  "Check whether runner health or bridge connectivity changed in the last 30 minutes.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/status"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "runner",
+                                                                   "bridge",
+                                                                   "health"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW31",
+                      "title":  "Prepare rollback plan",
+                      "query":  "Prepare rollback plan to previous stable version for the latest deployment, no execution.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "plan/preview",
+                                                               "lifecycle/rollback"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "rollback",
+                                                                   "plan",
+                                                                   "Execution plan"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW32",
+                      "title":  "Execute rollback approval gated",
+                      "query":  "Rollback to the previous stable snapshot now.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "lifecycle/rollback"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "rollback",
+                                                                   "snapshot",
+                                                                   "Execution"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW33",
+                      "title":  "Audit trail by conversation",
+                      "query":  "Show the audit trail for this conversation including requested actions and outcomes.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "plan/preview"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "audit",
+                                                                   "actions",
+                                                                   "outcomes"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW34",
+                      "title":  "CAB ready summary",
+                      "query":  "Produce CAB-ready summary of planned/applied integration changes and risks.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "plan/preview"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "CAB",
+                                                                   "changes",
+                                                                   "risks"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW35",
+                      "title":  "Add multiple hosts demo",
+                      "query":  "Add disabled business operations named AIAgent.Demo.OpA, AIAgent.Demo.OpB and AIAgent.Demo.OpC.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/host/add"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Execution",
+                                                                   "Add host",
+                                                                   "executed"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW36",
+                      "title":  "Edit multiple hosts demo",
+                      "query":  "Update business operations named AIAgent.Demo.OpA, AIAgent.Demo.OpB and AIAgent.Demo.OpC set Enabled=0.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/host/settings"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Update host",
+                                                                   "Execution",
+                                                                   "settings"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  },
+                  {
+                      "id":  "RW37",
+                      "title":  "Remove multiple hosts demo",
+                      "query":  "Remove business operations named AIAgent.Demo.OpA, AIAgent.Demo.OpB and AIAgent.Demo.OpC.",
+                      "expected":  {
+                                       "actionTargetAny":  [
+                                                               "production/host/remove"
+                                                           ],
+                                       "requiresApproval":  false,
+                                       "responseIncludesAny":  [
+                                                                   "Remove host",
+                                                                   "Execution",
+                                                                   "executed"
+                                                               ],
+                                       "responseNotIncludes":  [
+
+                                                               ]
+                                   }
+                  }
+              ]
 }

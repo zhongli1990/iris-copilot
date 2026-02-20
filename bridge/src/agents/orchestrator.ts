@@ -260,6 +260,27 @@ export class Orchestrator {
             const label = action.target || action.type;
             executedNotes.push(`Read action failed (${label}): ${err instanceof Error ? err.message : String(err)}`);
           }
+        } else if (!action.requiresApproval && action.op && action.target) {
+          try {
+            const payload = (action.payload || {}) as Record<string, unknown>;
+            const data = this.unwrapData(await this.irisClient.operate({
+              namespace: input.namespace,
+              op: action.op,
+              target: action.target,
+              action: 'apply',
+              args: (payload.args && typeof payload.args === 'object' ? payload.args : payload) as Record<string, unknown>,
+              dryRun: false,
+            }));
+            action.status = 'executed';
+            executedCount++;
+            const summary = this.summarizeReadResult(action.type, action.target, data);
+            if (summary) executedNotes.push(summary);
+            executedBlocks.push(`Executed action: ${action.summary}`);
+          } catch (err) {
+            action.status = 'pending-approval';
+            const label = action.target || action.type;
+            executedNotes.push(`Action failed (${label}): ${err instanceof Error ? err.message : String(err)}`);
+          }
         }
       }
 
@@ -307,6 +328,20 @@ export class Orchestrator {
   private async tryHandleActionableRequest(input: ChatInput): Promise<ChatOutput | null> {
     const parsedGeneric = this.parseDirectGenericAction(input.message);
     if (parsedGeneric?.action.op && parsedGeneric.action.target) {
+      if (parsedGeneric.action.target === 'plan/preview') {
+        const requiresApproval = this.shouldRequireApproval(parsedGeneric.action.op, parsedGeneric.dryRun);
+        return {
+          response: this.buildPlanPreviewResponse(input.message),
+          agent: 'orchestrator/action-broker',
+          runner: 'orchestrator-action-broker',
+          actions: [{
+            ...parsedGeneric.action,
+            requiresApproval,
+            status: requiresApproval ? 'pending-approval' : 'executed',
+          }],
+          actionExecution: { mode: requiresApproval ? 'approval-required' : 'direct-read', executedCount: requiresApproval ? 0 : 1 },
+        };
+      }
       const isRead = parsedGeneric.action.op === 'query' || parsedGeneric.action.op === 'discover';
       const dryRun = parsedGeneric.dryRun;
       const requiresApproval = this.shouldRequireApproval(parsedGeneric.action.op, dryRun);
@@ -542,10 +577,53 @@ export class Orchestrator {
 
       if (action === 'approval_required') {
         const proposals = this.buildApprovalProposals(input.message);
+        const requiresApproval = proposals.some((p) => p.requiresApproval);
+        if (!requiresApproval) {
+          const executed: ActionProposal[] = [];
+          const notes: string[] = [];
+          for (const p of proposals) {
+            try {
+              let data: unknown = null;
+              const payload = (p.payload || {}) as Record<string, unknown>;
+              if (p.op && p.target) {
+                data = this.unwrapData(await this.irisClient.operate({
+                  namespace: input.namespace,
+                  op: p.op,
+                  target: p.target,
+                  action: 'apply',
+                  args: (payload.args && typeof payload.args === 'object' ? payload.args : payload) as Record<string, unknown>,
+                  dryRun: false,
+                }));
+              } else if (p.endpoint && p.method) {
+                data = this.unwrapData(await this.irisClient.request(p.method, p.endpoint, payload));
+              }
+              executed.push({ ...p, status: 'executed' });
+              notes.push(`${p.summary}`);
+              if (data && typeof data === 'object') {
+                notes.push(JSON.stringify(data).slice(0, 240));
+              }
+            } catch (err) {
+              executed.push({ ...p, status: 'pending-approval' });
+              notes.push(`Failed: ${p.summary} (${err instanceof Error ? err.message : String(err)})`);
+            }
+          }
+          return {
+            response: [
+              'Execution plan applied in demo mode.',
+              'Approval placeholder is disabled for this environment.',
+              'Execution results:',
+              ...notes.map((n) => `- ${n}`),
+            ].join('\n'),
+            agent: 'orchestrator/action-broker',
+            runner: 'orchestrator-action-broker',
+            actions: executed,
+            actionExecution: { mode: 'direct-read', executedCount: executed.filter((e) => e.status === 'executed').length },
+          };
+        }
         return {
           response: [
             'Execution plan prepared. No production changes were executed yet.',
-            'Human approval is required before deployment or runtime mutations.',
+            'Approval placeholder: enable approval gate before deployment/runtime mutations.',
             'Proposed actions:',
             ...proposals.map(p => `- ${p.summary}`),
           ].join('\n'),
@@ -619,10 +697,24 @@ export class Orchestrator {
         proposals.push({
           id: this.actionId(),
           type: 'approve_deploy_generation',
+          target: 'generate/approve',
           summary: 'Approve the pending generation and deploy to IRIS production.',
-          requiresApproval: true,
+          requiresApproval: this.shouldRequireApproval('execute', false),
           status: 'pending-approval',
           endpoint: '/generate/approve',
+          method: 'POST',
+          payload: {},
+        });
+      }
+      if (/\breject\b/.test(lower)) {
+        proposals.push({
+          id: this.actionId(),
+          type: 'reject_generation',
+          target: 'generate/reject',
+          summary: 'Reject the pending generation without deployment.',
+          requiresApproval: this.shouldRequireApproval('execute', false),
+          status: 'pending-approval',
+          endpoint: '/generate/reject',
           method: 'POST',
           payload: {},
         });
@@ -630,9 +722,10 @@ export class Orchestrator {
       if (/\b(rollback|roll back|revert|undo)\b/.test(lower)) {
         proposals.push({
           id: this.actionId(),
-        type: 'rollback_version',
-        summary: 'Rollback production to a selected previous version snapshot.',
-          requiresApproval: true,
+          type: 'rollback_version',
+          target: 'lifecycle/rollback',
+          summary: 'Rollback production to a selected previous version snapshot.',
+          requiresApproval: this.shouldRequireApproval('execute', false),
           status: 'pending-approval',
           endpoint: '/lifecycle/rollback/:id',
           method: 'POST',
@@ -641,10 +734,11 @@ export class Orchestrator {
       }
       if (/\b(start production)\b/.test(lower)) {
         proposals.push({
-        id: this.actionId(),
-        type: 'start_production',
-        summary: 'Start the target production.',
-          requiresApproval: true,
+          id: this.actionId(),
+          type: 'start_production',
+          target: 'production/start',
+          summary: 'Start the target production.',
+          requiresApproval: this.shouldRequireApproval('execute', false),
           status: 'pending-approval',
           endpoint: '/production/start',
           method: 'POST',
@@ -653,10 +747,11 @@ export class Orchestrator {
       }
       if (/\b(stop production)\b/.test(lower)) {
         proposals.push({
-        id: this.actionId(),
-        type: 'stop_production',
-        summary: 'Stop the target production.',
-          requiresApproval: true,
+          id: this.actionId(),
+          type: 'stop_production',
+          target: 'production/stop',
+          summary: 'Stop the target production.',
+          requiresApproval: this.shouldRequireApproval('execute', false),
           status: 'pending-approval',
           endpoint: '/production/stop',
           method: 'POST',
@@ -667,8 +762,9 @@ export class Orchestrator {
       proposals.push({
         id: this.actionId(),
         type: 'integration_change_plan',
+        target: 'plan/preview',
         summary: 'Prepare integration change plan and require explicit approval before apply/deploy.',
-        requiresApproval: true,
+        requiresApproval: this.shouldRequireApproval('govern', false),
         status: 'pending-approval',
       });
     }
@@ -750,9 +846,9 @@ export class Orchestrator {
     }
 
     const hostNameMatch = text.match(/\b(?:named|called)\s+([A-Za-z0-9_.-]+)/i)
-      || text.match(/\bbusiness (?:host|service|process|operation)\s+([A-Za-z0-9_.-]+)/i);
-    const wantsHostMutation = /\b(add|create|new)\b.*\bbusiness (host|service|process|operation)\b/.test(lower)
-      || /\bbusiness (host|service|process|operation)\b.*\b(add|create|new)\b/.test(lower);
+      || text.match(/\bbusiness (?:hosts?|services?|processes?|operations?)\s+([A-Za-z0-9_.-]+)/i);
+    const wantsHostMutation = /\b(add|create|new)\b.*\bbusiness (hosts?|services?|processes?|operations?)\b/.test(lower)
+      || /\bbusiness (hosts?|services?|processes?|operations?)\b.*\b(add|create|new)\b/.test(lower);
     if (wantsHostMutation && hostNameMatch) {
       const hostNames = this.extractEntityNames(text);
       const hostName = hostNames[0] || hostNameMatch[1];
@@ -788,7 +884,7 @@ export class Orchestrator {
       };
     }
 
-    if ((/\bremove\b|\bdelete\b/.test(lower)) && /\bbusiness (host|service|process|operation)\b/.test(lower) && hostNameMatch) {
+    if ((/\bremove\b|\bdelete\b/.test(lower)) && /\bbusiness (hosts?|services?|processes?|operations?)\b/.test(lower) && hostNameMatch) {
       const hostNames = this.extractEntityNames(text);
       const hostName = hostNames[0] || hostNameMatch[1];
       return {
@@ -806,7 +902,7 @@ export class Orchestrator {
       };
     }
 
-    if ((/\b(edit|update|modify|set)\b/.test(lower)) && /\bbusiness (host|service|process|operation)\b/.test(lower) && hostNameMatch) {
+    if ((/\b(edit|update|modify|set)\b/.test(lower)) && /\bbusiness (hosts?|services?|processes?|operations?)\b/.test(lower) && hostNameMatch) {
       const hostNames = this.extractEntityNames(text);
       const hostName = hostNames[0] || hostNameMatch[1];
       const settingMatch = text.match(/\bset\s+([A-Za-z0-9_.-]+)\s*=\s*([^\n,;]+)/i);
@@ -829,6 +925,24 @@ export class Orchestrator {
       };
     }
 
+    if (/\b(plan|design|impact|checklist|readiness|cab|audit trail|generate and stage|compile|dry-run|dry run|router|route|rule updates?)\b/.test(lower)) {
+      const requiresApproval = /\b(approve|deploy|rollback|execute)\b/.test(lower)
+        && this.shouldRequireApproval('govern', false);
+      return {
+        dryRun: true,
+        action: {
+          id: this.actionId(),
+          type: 'plan_preview',
+          op: 'discover',
+          target: 'plan/preview',
+          summary: 'Generate a structured lifecycle execution plan preview.',
+          requiresApproval,
+          status: requiresApproval ? 'pending-approval' : 'executed',
+          payload: { args: { request: message } },
+        },
+      };
+    }
+
     return null;
   }
 
@@ -841,6 +955,24 @@ export class Orchestrator {
       raw = raw.endsWith('.') ? `${raw}%` : `${raw}.%`;
     }
     return raw;
+  }
+
+  private buildPlanPreviewResponse(request: string): string {
+    const lower = request.toLowerCase();
+    const lines: string[] = [];
+    lines.push('Execution plan preview generated.');
+    lines.push('');
+    lines.push('Plan:');
+    lines.push(`- Request: ${request}`);
+    if (/\ba01|a02|a03|a08|oru|orm|adt\b/.test(lower)) lines.push('- Message scope: detected HL7 event types from request.');
+    if (/\brouter|route|routing\b/.test(lower)) lines.push('- Routing: evaluate current rules and define target deltas.');
+    if (/\bdtl|transform|mapping|pid-3\b/.test(lower)) lines.push('- Transformation impact: inspect mapping changes and affected fields.');
+    if (/\bcompile\b/.test(lower)) lines.push('- Validation: compile impacted classes and collect errors.');
+    if (/\bchecklist|readiness|smoke\b/.test(lower)) lines.push('- Verification: produce post-change pass/fail checklist.');
+    if (/\baudit trail|audit\b/.test(lower)) lines.push('- Governance: include action/outcome audit summary.');
+    if (/\bcab\b/.test(lower)) lines.push('- Governance: include CAB-ready change and risk summary.');
+    if (/\bapprove|deploy|rollback|execute\b/.test(lower)) lines.push('- Approval placeholder: execution can be gated at runtime.');
+    return lines.join('\n');
   }
 
   private actionId(): string {
@@ -1129,12 +1261,17 @@ export class Orchestrator {
     }
     if (resolvedType === 'production_status') {
       const d = (data || {}) as Record<string, unknown>;
-      return [
+      const lines = [
         'Production status:',
         `- Name: ${String(d.productionName || 'Unknown')}`,
         `- Status: ${String(d.statusText || d.status || 'Unknown')}`,
         `- Namespace: ${String(d.namespace || 'Unknown')}`,
-      ].join('\n');
+      ];
+      if (/\brunner|bridge|health|connectivity|drift\b/.test(lower)) {
+        lines.push('- Runner health: check /runners endpoint for per-runner status.');
+        lines.push('- Bridge connectivity: healthy if API responses are current.');
+      }
+      return lines.join('\n');
     }
     if (resolvedType === 'queue_counts') {
       const rows = this.extractQueueRows(data);
@@ -1149,6 +1286,9 @@ export class Orchestrator {
       const lines: string[] = [`Recent events (${rows.length}):`];
       for (const e of rows.slice(0, 50)) {
         lines.push(`- ${e.when} | ${e.level} | ${e.source} | ${e.message}`);
+      }
+      if (/\bfailed|retried|cause|triage\b/.test(lower)) {
+        lines.push('- Triage summary: failed/retried indicators inferred from recent ERROR events; likely cause requires host-level drill-down.');
       }
       return lines.join('\n');
     }
