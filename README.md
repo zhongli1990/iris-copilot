@@ -112,9 +112,10 @@ Health checks:
 
 ## License
 
-This project is licensed under the **MIT License**.
-See `LICENSE` for the full MIT license text.
+This project is licensed under the **Apache License 2.0**.
+See `LICENSE` for the full Apache-2.0 license text.
 
+Enterprise/commercial terms are available separately in `LICENSE-ENTERPRISE.md`.
 
 
 

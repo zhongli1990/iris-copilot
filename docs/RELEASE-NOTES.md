@@ -52,7 +52,7 @@ Documentation, governance, and regression-evaluation release: expanded real-worl
   - Added explicit IRIS Web Application setup step after import in:
     - `README.md`
 - Licensing/docs policy:
-  - README license section updated to standard MIT statement.
+  - README license section updated to standard open-source license statement.
   - Design/generic markdown docs moved to local-only policy and removed from published git history.
 - Neutral documentation wording:
   - Removed site-specific `Bradford` naming from published markdown docs.
