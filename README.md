@@ -52,7 +52,20 @@ do ##class(AIAgent.Deploy.ImportAll).Run("<path>\\cls\\")
 do ##class(AIAgent.Install.Installer).Run()
 ```
 
-### 2. Start bridge
+### 2. Create IRIS Web Application
+
+In IRIS Management Portal, create/update two web applications:
+
+1. `/<namespace>/` for CSP pages (for `AIAgent.UI.Chat.cls`)
+2. `/ai` for REST APIs (dispatch class `AIAgent.API.Dispatcher`)
+
+Recommended settings:
+- Namespace: your target namespace (for example `DEMO2_AI2`)
+- Dispatch Class (for `/ai`): `AIAgent.API.Dispatcher`
+- Enable Authentication: Password or delegated SSO per site policy
+- Allowed Authentication Methods: align with your enterprise security model
+
+### 3. Start bridge
 
 ```bash
 cd bridge
@@ -65,7 +78,7 @@ Configure keys and runner settings in:
 - `bridge/.env` (local)
 - `bridge/.env.example` (template)
 
-### 3. Open Chat UI
+### 4. Open Chat UI
 
 ```text
 http://<iris-host>:52773/csp/<namespace>/AIAgent.UI.Chat.cls
