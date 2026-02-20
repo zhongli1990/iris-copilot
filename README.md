@@ -49,9 +49,7 @@ Typical terminal flow:
 
 ```objectscript
 zn "<YOUR_NAMESPACE>"
-do $system.OBJ.Load("<path>\\deploy\\ImportAll.cls", "ck")
-do ##class(AIAgent.Deploy.ImportAll).Run("<path>\\cls\\")
-do ##class(AIAgent.Install.Installer).Run()
+do $system.OBJ.Load("<path>\\deploy\\AIAgent-export-v33.xml", "ck")
 ```
 
 ### 2. Create IRIS Web Application
