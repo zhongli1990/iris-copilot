@@ -1069,7 +1069,7 @@ ClassMethod OnPage() As %Status
             </template>
 
             <!-- Conversation messages -->
-            <template x-if="currentConversationId && (messages.length > 0 || isStreaming)">
+            <template x-if="currentConversationId && (messages.length || isStreaming)">
                 <div class="messages-inner">
                     <template x-for="msg in messages" :key="msg.messageId">
                         <div class="message-row" :class="msg.role">
