@@ -7,6 +7,9 @@ Generated from:
 Detailed query-by-query outcomes:
 - `docs/REALWORLD-TEST-RESULTS.md`
 
+Execution method and step-by-step run instructions:
+- `docs/REALWORLD-TEST-RUNBOOK.md`
+
 ## Summary
 
 - Total cases: 37
