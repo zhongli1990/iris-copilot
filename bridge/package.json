@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "e2e:sample": "tsx src/tools/e2e-sample-queries.ts"
+    "e2e:sample": "tsx src/tools/e2e-sample-queries.ts",
+    "e2e:realworld": "tsx src/tools/e2e-realworld-regression.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
