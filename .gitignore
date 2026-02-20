@@ -31,6 +31,7 @@ deploy/AIAgent-export*.xml
 !deploy/AIAgent-export-v29.xml
 !deploy/AIAgent-export-v30.xml
 !deploy/AIAgent-export-v31.xml
+!deploy/AIAgent-export-v32.xml
 
 # Local/private docs (do not publish)
 docs/*[Dd][Ee][Ss][Ii][Gg][Nn]*.md

@@ -346,8 +346,11 @@ ClassMethod OnPage() As %Status
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 12px;
-            max-width: 600px;
+            max-width: 920px;
             width: 100%;
+            max-height: 56vh;
+            overflow-y: auto;
+            padding-right: 4px;
         }
 
         .suggestion-card {
@@ -1049,34 +1052,24 @@ ClassMethod OnPage() As %Status
         <!-- Messages -->
         <div class="messages-container" x-ref="messagesContainer">
             <!-- Welcome screen when no conversation selected -->
-            <template x-if="!currentConversationId">
+            <template x-if="!currentConversationId || (currentConversationId && messages.length === 0 && !isStreaming)">
                 <div class="welcome-screen">
                     <div class="welcome-logo">IC</div>
                     <h1>OpenLI IRIS CoPilot</h1>
-                    <p>AI-powered assistant for building and managing InterSystems IRIS interoperability productions. Ask me to create services, processes, operations, transforms, and more.</p>
+                    <p>Quick Queries from the real-world E2E suite. Click any tested prompt to start immediately.</p>
                     <div class="welcome-suggestions">
-                        <div class="suggestion-card" @click="useSuggestion('List all production hosts with full details.')">
-                            <strong>Production Topology</strong>
-                            List all hosts with class, category, and enabled state
-                        </div>
-                        <div class="suggestion-card" @click="useSuggestion('Show queue depth for all hosts.')">
-                            <strong>Queue Depth</strong>
-                            Show queue counts across production hosts
-                        </div>
-                        <div class="suggestion-card" @click="useSuggestion('Show recent production events.')">
-                            <strong>Recent Events</strong>
-                            Review latest production event log entries
-                        </div>
-                        <div class="suggestion-card" @click="useSuggestion('Show lookup table ErrorCodes content.')">
-                            <strong>Lookup Content</strong>
-                            Read live lookup table values from IRIS
-                        </div>
+                        <template x-for="qq in quickQueries" :key="qq.id">
+                            <div class="suggestion-card" @click="useSuggestion(qq.query)">
+                                <strong x-text="qq.id + ' ' + qq.title"></strong>
+                                <span x-text="qq.query"></span>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </template>
 
             <!-- Conversation messages -->
-            <template x-if="currentConversationId">
+            <template x-if="currentConversationId && (messages.length > 0 || isStreaming)">
                 <div class="messages-inner">
                     <template x-for="msg in messages" :key="msg.messageId">
                         <div class="message-row" :class="msg.role">
@@ -1448,6 +1441,45 @@ function chatApp() {
 
         currentNamespace: '',
         userInitials: 'U',
+        quickQueries: [
+            { id: 'RW01', title: 'Production topology full detail', query: 'List all production hosts with full details.' },
+            { id: 'RW02', title: 'Queue depth overview', query: 'Show queue depth for all hosts.' },
+            { id: 'RW03', title: 'Recent production events', query: 'Show recent production events.' },
+            { id: 'RW04', title: 'Lookup table content', query: 'Show lookup table ErrorCodes content.' },
+            { id: 'RW05', title: 'Class metadata query', query: 'Show metadata for class AIAgent.API.Dispatcher.' },
+            { id: 'RW06', title: 'Invocation policy query', query: 'Show invocation policy.' },
+            { id: 'RW07', title: 'Class catalog by package pattern', query: 'List classes in the NHSTIE2.* packages.' },
+            { id: 'RW08', title: 'Dry-run add disabled host', query: 'Create a plan to add a disabled test business host named AIAgent.DryRun.TestHost, dry-run only.' },
+            { id: 'RW09', title: 'Apply add host', query: 'Add a disabled test business host named AIAgent.DryRun.TestHost.' },
+            { id: 'RW10', title: 'Dry-run remove host', query: 'Remove business host named AIAgent.DryRun.TestHost, dry-run only.' },
+            { id: 'RW11', title: 'Platform health snapshot', query: 'Recap current platform health, active production, and runner status.' },
+            { id: 'RW12', title: 'Production host names only', query: 'List all production host names only.' },
+            { id: 'RW13', title: 'Disabled host inventory', query: 'Show all currently disabled business hosts.' },
+            { id: 'RW14', title: 'Recent error events', query: 'Show recent production events with level ERROR in the last 60 minutes.' },
+            { id: 'RW15', title: 'Queue hotspots', query: 'Which 10 hosts have the highest queue depth right now?' },
+            { id: 'RW16', title: 'New interface design plan', query: 'Design an interface plan for ADT A01/A02/A03 from PAS to DrDoctor with required transforms and routing.' },
+            { id: 'RW17', title: 'Existing router change plan', query: 'Create a change plan to add a new downstream operation to the current PAS router for A08 messages only.' },
+            { id: 'RW18', title: 'DTL impact assessment', query: 'Assess impact of changing PID-3 mapping in the existing PAS ADT transform.' },
+            { id: 'RW19', title: 'Generate operation dry-run', query: 'Create a dry-run plan for a new disabled business operation AIAgent.Generated.DrDoctor.Operation.' },
+            { id: 'RW20', title: 'Generate router delta dry-run', query: 'Prepare dry-run router rule updates to route ORM messages to a new operation.' },
+            { id: 'RW21', title: 'Generate with approval gate', query: 'Generate and stage required classes for a new ORU pathway; do not deploy until I approve.' },
+            { id: 'RW22', title: 'Approve pending generation', query: 'Approve the latest staged generation and deploy it now.' },
+            { id: 'RW23', title: 'Reject pending generation', query: 'Reject the currently staged generation and close it without deployment.' },
+            { id: 'RW24', title: 'Compile validation', query: 'Compile all newly generated classes and show errors if any.' },
+            { id: 'RW25', title: 'Post-deploy smoke checklist', query: 'Run post-deploy verification checklist for the new route and summarize pass/fail.' },
+            { id: 'RW26', title: 'Route presence verification', query: 'Confirm the new operation is connected in router rules and currently disabled.' },
+            { id: 'RW27', title: 'Message flow readiness', query: 'Validate readiness for A01/A02/A03 traffic through the new route without enabling it.' },
+            { id: 'RW28', title: 'Queue spike investigation', query: 'Investigate why queue depth spiked in the last hour and identify likely bottleneck hosts.' },
+            { id: 'RW29', title: 'Failed message triage', query: 'Show failed/retried message indicators for the last 2 hours and likely causes.' },
+            { id: 'RW30', title: 'Runner drift check', query: 'Check whether runner health or bridge connectivity changed in the last 30 minutes.' },
+            { id: 'RW31', title: 'Prepare rollback plan', query: 'Prepare rollback plan to previous stable version for the latest deployment, no execution.' },
+            { id: 'RW32', title: 'Execute rollback', query: 'Rollback to the previous stable snapshot now.' },
+            { id: 'RW33', title: 'Audit trail by conversation', query: 'Show the audit trail for this conversation including requested actions and outcomes.' },
+            { id: 'RW34', title: 'CAB ready summary', query: 'Produce CAB-ready summary of planned/applied integration changes and risks.' },
+            { id: 'RW35', title: 'Add multiple hosts demo', query: 'Add disabled business operations named AIAgent.Demo.OpA, AIAgent.Demo.OpB and AIAgent.Demo.OpC.' },
+            { id: 'RW36', title: 'Edit multiple hosts demo', query: 'Update business operations named AIAgent.Demo.OpA, AIAgent.Demo.OpB and AIAgent.Demo.OpC set Enabled=0.' },
+            { id: 'RW37', title: 'Remove multiple hosts demo', query: 'Remove business operations named AIAgent.Demo.OpA, AIAgent.Demo.OpB and AIAgent.Demo.OpC.' }
+        ],
 
         // ----- Computed -----
         get showMobileOverlay() {
