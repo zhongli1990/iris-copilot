@@ -1,14 +1,14 @@
-# Demo Clinical Lifecycle — Pharmacy Dose-Check Alert Integration
+﻿# Demo Clinical Lifecycle â€” Pharmacy Dose-Check Alert Integration
 
-**Purpose:** This document demonstrates the complete lifecycle of a new clinical integration requirement — from initial English-language request through AI-driven design, code generation, human review, deployment, testing, and ongoing monitoring — all within the IRIS AI Agent Platform ("IRIS Copilot").
+**Purpose:** This document demonstrates the complete lifecycle of a new clinical integration requirement â€” from initial English-language request through AI-driven design, code generation, human review, deployment, testing, and ongoing monitoring â€” all within the IRIS AI Agent Platform ("IRIS Copilot").
 
-**Demo Scenario:** A realistic, net-new Trust TIE integration that does not exist today.
+**Demo Scenario:** A realistic, net-new TIE integration that does not exist today.
 
 ---
 
 ## The Clinical Requirement (English)
 
-> **From:** Sarah Mitchell, Lead Pharmacist, Example Trust
+> **From:** Sarah Mitchell, Lead Pharmacist, Example NHS Trust
 >
 > **To:** Integration Team
 >
@@ -41,7 +41,7 @@ order to the existing Cerner pharmacy route regardless.
 
 ---
 
-## Phase 2: Orchestrator Agent — Intent Analysis
+## Phase 2: Orchestrator Agent â€” Intent Analysis
 
 The **Orchestrator Agent** (Claude Opus 4.6 via Claude Agent SDK) processes the message:
 
@@ -51,17 +51,17 @@ The **Orchestrator Agent** (Claude Opus 4.6 via Claude Agent SDK) processes the 
 Intent:           NEW_INTEGRATION
 Domain:           Pharmacy / Order Safety
 Message Type:     HL7 RDE^O11 (Pharmacy/Treatment Encoded Order)
-Source System:    Cerner (already connected — "From Cerner Orders" on port 30002)
+Source System:    Cerner (already connected â€” "From Cerner Orders" on port 30002)
 New Components:   Business Process (dose checking), Lookup Table, Email Operation, File Operation
 Existing Reuse:   Cerner inbound service already exists, pharmacy forwarding route already exists
 ```
 
 ### 2.2 Orchestrator Asks Clarifying Questions
 
-The Orchestrator checks the existing Trust TIE production (via IRIS MCP tools) and identifies what it needs to confirm:
+The Orchestrator checks the existing TIE production (via IRIS MCP tools) and identifies what it needs to confirm:
 
 ```
-IRIS Copilot: I can see the Trust TIE already receives Cerner orders via
+IRIS Copilot: I can see the TIE already receives Cerner orders via
 "From Cerner Orders" (TCP port 30002, schema CERNER2.3). I have a few questions
 before I design this:
 
@@ -71,14 +71,14 @@ before I design this:
 2. Which field contains the ordered dose? Typically RXE-3 (Give Amount - Minimum).
    Confirm?
 
-3. The dose units — should I also verify units match (e.g., "mg" vs "mcg")?
+3. The dose units â€” should I also verify units match (e.g., "mg" vs "mcg")?
    Or is the lookup table keyed by drug code alone with a single max number?
 
 4. For the existing pharmacy route: I can see "EPMA Pharmacy Router" in the
    production. Should the original RDE^O11 continue to EPMA, or is there a
    different target?
 
-5. File logging path — where should audit files be written?
+5. File logging path â€” where should audit files be written?
    (e.g., C:\TEST\PharmAlerts\ or a network share?)
 ```
 
@@ -94,49 +94,49 @@ User: 1. Yes, RXE-2.1 for drug code
 
 ---
 
-## Phase 3: Architect Agent — Production Topology Design
+## Phase 3: Architect Agent â€” Production Topology Design
 
 The **Architect Agent** queries the IRIS MCP server to understand the current production, then designs the topology:
 
 ### 3.1 Existing Topology (Discovered via MCP)
 
 ```
-[From Cerner Orders]                    ← EnsLib.HL7.Service.TCPService, port 30002
-    │
-    ▼
-[Cerner Distributor]                    ← EnsLib.HL7.MsgRouter.RoutingEngine
-    │                                      ruleset: Trust.Interfaces.Cerner.DistributorRules
-    ├──→ [EPMA Pharmacy Router]      ← existing pharmacy route (RDE messages)
-    ├──→ [CRIS Router]                  ← radiology orders
-    ├──→ [Other routers...]
+[From Cerner Orders]                    â† EnsLib.HL7.Service.TCPService, port 30002
+    â”‚
+    â–¼
+[Cerner Distributor]                    â† EnsLib.HL7.MsgRouter.RoutingEngine
+    â”‚                                      ruleset: Trust.Interfaces.Cerner.DistributorRules
+    â”œâ”€â”€â†’ [EPMA Pharmacy Router]      â† existing pharmacy route (RDE messages)
+    â”œâ”€â”€â†’ [CRIS Router]                  â† radiology orders
+    â”œâ”€â”€â†’ [Other routers...]
 ```
 
 ### 3.2 Proposed Topology Addition
 
 ```
-[From Cerner Orders]                    ← EXISTING (no change)
-    │
-    ▼
-[Cerner Distributor]                    ← EXISTING — add ONE new rule:
-    │                                      "When RDE^O11, also send to Pharmacy Dose Check Process"
-    │
-    ├──→ [EPMA Pharmacy Router]      ← EXISTING (unchanged, still receives all pharmacy orders)
-    │
-    └──→ [Pharmacy Dose Check Process]  ← NEW Business Process (BPL)
-              │
-              │ (1) Extract drug code from RXE-2.1 and dose from RXE-3
-              │ (2) Lookup max dose from "PharmDoseLimit" lookup table
-              │ (3) If dose > max:
-              │         │
-              │         ├──→ [Pharmacy Alert Email]      ← NEW Business Operation (email)
-              │         │        To: pharmsafety@example.nhs.uk
-              │         │        Subject: "DOSE ALERT: {DrugName} - {Dose} exceeds max {MaxDose}"
-              │         │
-              │         └──→ [Pharmacy Alert File Log]   ← NEW Business Operation (file)
-              │                  Path: C:\TIE\Logs\PharmDoseAlerts\
-              │                  One line per alert: timestamp|MRN|drug|dose|max
-              │
-              └─ (4) No further action needed (EPMA already gets the order
+[From Cerner Orders]                    â† EXISTING (no change)
+    â”‚
+    â–¼
+[Cerner Distributor]                    â† EXISTING â€” add ONE new rule:
+    â”‚                                      "When RDE^O11, also send to Pharmacy Dose Check Process"
+    â”‚
+    â”œâ”€â”€â†’ [EPMA Pharmacy Router]      â† EXISTING (unchanged, still receives all pharmacy orders)
+    â”‚
+    â””â”€â”€â†’ [Pharmacy Dose Check Process]  â† NEW Business Process (BPL)
+              â”‚
+              â”‚ (1) Extract drug code from RXE-2.1 and dose from RXE-3
+              â”‚ (2) Lookup max dose from "PharmDoseLimit" lookup table
+              â”‚ (3) If dose > max:
+              â”‚         â”‚
+              â”‚         â”œâ”€â”€â†’ [Pharmacy Alert Email]      â† NEW Business Operation (email)
+              â”‚         â”‚        To: pharmsafety@example.nhs.uk
+              â”‚         â”‚        Subject: "DOSE ALERT: {DrugName} - {Dose} exceeds max {MaxDose}"
+              â”‚         â”‚
+              â”‚         â””â”€â”€â†’ [Pharmacy Alert File Log]   â† NEW Business Operation (file)
+              â”‚                  Path: C:\TIE\Logs\PharmDoseAlerts\
+              â”‚                  One line per alert: timestamp|MRN|drug|dose|max
+              â”‚
+              â””â”€ (4) No further action needed (EPMA already gets the order
                      from Cerner Distributor independently)
 ```
 
@@ -151,7 +151,7 @@ The **Architect Agent** queries the IRIS MCP server to understand the current pr
 | 5 | Pharmacy Alert Email | Business Operation | `Trust.AIGenerated.Pharmacy.Operation.AlertEmailOperation` |
 | 6 | Pharmacy Alert File Log | Business Operation | `Trust.AIGenerated.Pharmacy.Operation.AlertFileOperation` |
 | 7 | RDE to DoseCheck Transform | Data Transformation | `Trust.AIGenerated.Pharmacy.Transform.RDEtoDoseCheck` |
-| 8 | PharmDoseLimit | Lookup Table | `PharmDoseLimit.LUT` (drug code → max dose) |
+| 8 | PharmDoseLimit | Lookup Table | `PharmDoseLimit.LUT` (drug code â†’ max dose) |
 | 9 | Unit Test | %UnitTest | `Trust.AIGenerated.Pharmacy.Test.DoseCheckTest` |
 
 ### 3.4 Architect Presents to User
@@ -163,13 +163,13 @@ IRIS Copilot: Here's my design for the Pharmacy Dose-Check Alert integration:
 
 I'll create 8 new classes + 1 lookup table. The key design decisions:
 
-  • The dose check runs IN PARALLEL with the existing EPMA pharmacy route —
+  â€¢ The dose check runs IN PARALLEL with the existing EPMA pharmacy route â€”
     your orders still flow to EPMA immediately, no delay.
-  • The dose check process is a BPL (graphical business process) so it's easy
+  â€¢ The dose check process is a BPL (graphical business process) so it's easy
     to modify later.
-  • The drug/max-dose reference is a standard IRIS Lookup Table, editable from
+  â€¢ The drug/max-dose reference is a standard IRIS Lookup Table, editable from
     the Management Portal without any code changes.
-  • Email uses the existing NHSMail adapter pattern from the Trust TIE.
+  â€¢ Email uses the existing NHSMail adapter pattern from the TIE.
 
 Shall I generate the code?
 ```
@@ -180,7 +180,7 @@ User: Yes, generate it.
 
 ---
 
-## Phase 4: Developer Agent — Code Generation
+## Phase 4: Developer Agent â€” Code Generation
 
 The **Developer Agent** (OpenAI Codex, with Claude review) generates all ObjectScript classes.
 
@@ -204,7 +204,7 @@ Property AlertEmailTarget As %String(MAXLEN = 200) [ InitialExpression = "Pharma
 /// Production config name of the file alert operation
 Property AlertFileTarget As %String(MAXLEN = 200) [ InitialExpression = "Pharmacy Alert File Log" ];
 
-/// Name of the lookup table containing drug code → max dose
+/// Name of the lookup table containing drug code â†’ max dose
 Property LookupTableName As %String(MAXLEN = 100) [ InitialExpression = "PharmDoseLimit" ];
 
 /// Main BPL
@@ -291,7 +291,7 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
 
     </true>
     <false>
-      <!-- Dose within safe range or drug not in lookup — no action needed -->
+      <!-- Dose within safe range or drug not in lookup â€” no action needed -->
       <trace name="Dose OK"
              value="&quot;Dose check passed for &quot;_context.DrugCode_
                     &quot;: ordered=&quot;_context.OrderedDose_
@@ -311,7 +311,7 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
 **File:** `Trust.AIGenerated.Pharmacy.Operation.AlertEmailOperation`
 
 ```objectscript
-/// Sends dose-check alert emails via the Trust NHSMail adapter.
+/// Sends dose-check alert emails via the Site NHSMail adapter.
 /// Generated by IRIS Copilot.
 Class Trust.AIGenerated.Pharmacy.Operation.AlertEmailOperation Extends Ens.BusinessOperation
 {
@@ -425,7 +425,7 @@ Storage Default
 
 ### 4.5 Generated: Lookup Table
 
-**File:** `PharmDoseLimit.LUT` (Lookup Table — loaded via Management Portal or import)
+**File:** `PharmDoseLimit.LUT` (Lookup Table â€” loaded via Management Portal or import)
 
 ```
 Key,Value
@@ -452,7 +452,7 @@ NEW RULE to add to Cerner Distributor:
   Name:      "Pharmacy Dose Check"
   Condition:  Document.DocType = "2.3:RDE_O11"
   Action:     Send to "Pharmacy Dose Check Process"
-  Transform:  (none — pass HL7 message as-is)
+  Transform:  (none â€” pass HL7 message as-is)
   Note:       This rule runs IN ADDITION to existing rules.
               The existing EPMA pharmacy routing is unchanged.
 ```
@@ -465,15 +465,15 @@ All generated classes are displayed in the **Code Review panel**:
 IRIS Copilot: I've generated 6 classes + 1 lookup table + 1 routing rule change.
 Here's the summary:
 
-  ✅ DoseCheckProcess.cls        — BPL: extract dose → lookup → alert if exceeded
-  ✅ AlertEmailOperation.cls     — Sends email via NHSMail adapter
-  ✅ AlertFileOperation.cls      — Writes alert line to daily log file
-  ✅ AlertEmailRequest.cls       — Message class for email alerts
-  ✅ PharmDoseLimit.LUT          — Lookup table: drug code → max safe dose
-  ✅ Cerner Distributor rule     — New rule: RDE^O11 → Dose Check Process
-  ✅ DoseCheckTest.cls           — Unit test suite (see Phase 6)
+  âœ… DoseCheckProcess.cls        â€” BPL: extract dose â†’ lookup â†’ alert if exceeded
+  âœ… AlertEmailOperation.cls     â€” Sends email via NHSMail adapter
+  âœ… AlertFileOperation.cls      â€” Writes alert line to daily log file
+  âœ… AlertEmailRequest.cls       â€” Message class for email alerts
+  âœ… PharmDoseLimit.LUT          â€” Lookup table: drug code â†’ max safe dose
+  âœ… Cerner Distributor rule     â€” New rule: RDE^O11 â†’ Dose Check Process
+  âœ… DoseCheckTest.cls           â€” Unit test suite (see Phase 6)
 
-Review each class in the Code Review panel on the right →
+Review each class in the Code Review panel on the right â†’
 Click "Approve All" to deploy, or click individual classes to edit.
 ```
 
@@ -492,22 +492,22 @@ User reviews DoseCheckProcess.cls:
   - Checks the HL7 field paths (RXE:2.1, RXE:3, PID:3, PID:5)
   - Confirms the lookup table name matches
   - Confirms email address is correct
-  - Notes the process sends alerts async (won't slow down the main flow) ✓
+  - Notes the process sends alerts async (won't slow down the main flow) âœ“
 
 User reviews AlertEmailOperation.cls:
   - Confirms it uses EnsLib.EMail.OutboundAdapter (same as existing NHSMail pattern)
-  - From address looks correct ✓
+  - From address looks correct âœ“
 
 User reviews AlertFileOperation.cls:
-  - Confirms file path C:\TIE\Logs\PharmDoseAlerts\ ✓
-  - Daily log file naming convention ✓
+  - Confirms file path C:\TIE\Logs\PharmDoseAlerts\ âœ“
+  - Daily log file naming convention âœ“
 
 User clicks: "Approve All"
 ```
 
 ---
 
-## Phase 6: Deployer Agent — Compilation and Deployment
+## Phase 6: Deployer Agent â€” Compilation and Deployment
 
 Upon approval, the **Deployer Agent** executes:
 
@@ -515,9 +515,9 @@ Upon approval, the **Deployer Agent** executes:
 
 ```
 [Step 1] VersionManager.CreateSnapshot()
-  → Saves current state of Cerner Distributor routing rules
-  → Records snapshot as Version V-2026-0217-001
-  → Snapshot stored in Trust.AIAgent.Model.Version
+  â†’ Saves current state of Cerner Distributor routing rules
+  â†’ Records snapshot as Version V-2026-0217-001
+  â†’ Snapshot stored in AIAgent.Model.Version
 ```
 
 ### 6.2 Class Compilation
@@ -531,21 +531,21 @@ Upon approval, the **Deployer Agent** executes:
   Compiling Trust.AIGenerated.Pharmacy.Process.DoseCheckProcess ... OK
   Compiling Trust.AIGenerated.Pharmacy.Test.DoseCheckTest ... OK
 
-  ✓ All 5 classes compiled successfully (0 errors, 0 warnings)
+  âœ“ All 5 classes compiled successfully (0 errors, 0 warnings)
 ```
 
 ### 6.3 Lookup Table Import
 
 ```
 [Step 3] Import PharmDoseLimit lookup table
-  → 10 drug/dose entries loaded
-  → Editable via Management Portal > Lookup Tables
+  â†’ 10 drug/dose entries loaded
+  â†’ Editable via Management Portal > Lookup Tables
 ```
 
 ### 6.4 Production Configuration
 
 ```
-[Step 4] ProductionManager.AddBusinessHost() — add 3 new hosts to Trust.Productions.TEST:
+[Step 4] ProductionManager.AddBusinessHost() â€” add 3 new hosts to Trust.Productions.TEST:
 
   Adding "Pharmacy Dose Check Process"
     Class:    Trust.AIGenerated.Pharmacy.Process.DoseCheckProcess
@@ -572,32 +572,32 @@ Upon approval, the **Deployer Agent** executes:
     Settings: FilePath=C:\TIE\Logs\PharmDoseAlerts\
 
 [Step 5] Update Cerner Distributor routing rules:
-  → Add rule: DocType="2.3:RDE_O11" → send to "Pharmacy Dose Check Process"
-  → Existing rules untouched
+  â†’ Add rule: DocType="2.3:RDE_O11" â†’ send to "Pharmacy Dose Check Process"
+  â†’ Existing rules untouched
 
 [Step 6] ProductionManager.UpdateProduction()
-  → Live production update (no restart required)
-  → New hosts start automatically
+  â†’ Live production update (no restart required)
+  â†’ New hosts start automatically
 ```
 
 ### 6.5 Deployment Status in Chat UI
 
 ```
-IRIS Copilot: Deployment complete! ✓
+IRIS Copilot: Deployment complete! âœ“
 
-  📦 Version: V-2026-0217-001 (rollback available)
-  📝 5 classes compiled (0 errors)
-  📋 Lookup table "PharmDoseLimit" loaded (10 entries)
-  🏥 3 new production hosts added to Trust.Productions.TEST
-  📡 Cerner Distributor rule updated — RDE^O11 now routes to Dose Check
-  ⚡ Production updated live — new hosts are running
+  ðŸ“¦ Version: V-2026-0217-001 (rollback available)
+  ðŸ“ 5 classes compiled (0 errors)
+  ðŸ“‹ Lookup table "PharmDoseLimit" loaded (10 entries)
+  ðŸ¥ 3 new production hosts added to Trust.Productions.TEST
+  ðŸ“¡ Cerner Distributor rule updated â€” RDE^O11 now routes to Dose Check
+  âš¡ Production updated live â€” new hosts are running
 
   Next: I'll run the automated tests.
 ```
 
 ---
 
-## Phase 7: Tester Agent — Automated Testing
+## Phase 7: Tester Agent â€” Automated Testing
 
 The **Tester Agent** generates and executes a `%UnitTest` suite:
 
@@ -611,7 +611,7 @@ The **Tester Agent** generates and executes a `%UnitTest` suite:
 Class Trust.AIGenerated.Pharmacy.Test.DoseCheckTest Extends %UnitTest.TestCase
 {
 
-/// Test 1: Dose exceeds maximum — should trigger alert
+/// Test 1: Dose exceeds maximum â€” should trigger alert
 Method TestDoseExceedsMax()
 {
     // Build a synthetic RDE^O11 with AMOX500, dose 5000 (max is 3000)
@@ -636,7 +636,7 @@ Method TestDoseExceedsMax()
     }
 }
 
-/// Test 2: Dose within safe range — should NOT trigger alert
+/// Test 2: Dose within safe range â€” should NOT trigger alert
 Method TestDoseWithinRange()
 {
     set tMsg = ..BuildTestRDE("PARA500", "Paracetamol 500mg", "2000", "MRN67890", "Jones^Mary")
@@ -644,15 +644,15 @@ Method TestDoseWithinRange()
     do $$$AssertStatusOK(tSC, "Message sent to Dose Check Process")
 
     // The process should complete without sending any alert
-    // (No assertion for file content — we verify no NEW alert line for this drug)
+    // (No assertion for file content â€” we verify no NEW alert line for this drug)
 }
 
-/// Test 3: Drug not in lookup table — should NOT trigger alert (safe pass-through)
+/// Test 3: Drug not in lookup table â€” should NOT trigger alert (safe pass-through)
 Method TestDrugNotInLookup()
 {
     set tMsg = ..BuildTestRDE("UNKNOWN99", "Unknown Drug", "9999", "MRN11111", "Doe^Jane")
     set tSC = ..SendToProcess(tMsg)
-    do $$$AssertStatusOK(tSC, "Message sent — unknown drug does not cause error")
+    do $$$AssertStatusOK(tSC, "Message sent â€” unknown drug does not cause error")
 }
 
 /// Test 4: Lookup table is accessible and has expected entries
@@ -708,25 +708,25 @@ Method SendToProcess(pMsg As EnsLib.HL7.Message) As %Status
 ```
 IRIS Copilot: Running test suite Trust.AIGenerated.Pharmacy.Test.DoseCheckTest...
 
-  ✓ TestDoseExceedsMax          PASSED (4/4 assertions)
+  âœ“ TestDoseExceedsMax          PASSED (4/4 assertions)
     - Message sent successfully
     - Alert log file created
     - Log contains drug code, dose, max dose, and MRN
 
-  ✓ TestDoseWithinRange         PASSED (1/1 assertions)
+  âœ“ TestDoseWithinRange         PASSED (1/1 assertions)
     - Message processed without triggering alert
 
-  ✓ TestDrugNotInLookup         PASSED (1/1 assertions)
+  âœ“ TestDrugNotInLookup         PASSED (1/1 assertions)
     - Unknown drug processed without error
 
-  ✓ TestLookupTableExists       PASSED (2/2 assertions)
-    - AMOX500 → 3000 ✓
-    - WARF1 → 10 ✓
+  âœ“ TestLookupTableExists       PASSED (2/2 assertions)
+    - AMOX500 â†’ 3000 âœ“
+    - WARF1 â†’ 10 âœ“
 
-  ════════════════════════════════
+  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   Results: 4 passed, 0 failed, 0 errors
   Duration: 3.2 seconds
-  ════════════════════════════════
+  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 All tests passed! The Pharmacy Dose-Check Alert integration is live and working.
 ```
@@ -742,17 +742,17 @@ User: How is the pharmacy dose check integration running?
 
 IRIS Copilot: Here's the status for Pharmacy Dose Check (last 24 hours):
 
-  📊 Messages Processed:     847 RDE^O11 orders checked
-  🚨 Alerts Triggered:       12 dose exceedances detected
-  📧 Emails Sent:            12 (all delivered)
-  📝 File Log Entries:       12 (C:\TIE\Logs\PharmDoseAlerts\DoseAlerts_20260217.log)
-  ⚠️  Errors:                0
-  ⏱️  Avg Processing Time:   0.03 seconds
+  ðŸ“Š Messages Processed:     847 RDE^O11 orders checked
+  ðŸš¨ Alerts Triggered:       12 dose exceedances detected
+  ðŸ“§ Emails Sent:            12 (all delivered)
+  ðŸ“ File Log Entries:       12 (C:\TIE\Logs\PharmDoseAlerts\DoseAlerts_20260217.log)
+  âš ï¸  Errors:                0
+  â±ï¸  Avg Processing Time:   0.03 seconds
 
   Most frequent alerts:
-    CODEI30 (Codeine 30mg): 5 alerts — ordered doses between 300-480mg
-    MORPH10 (Morphine 10mg): 4 alerts — ordered doses between 250-500mg
-    WARF1 (Warfarin 1mg): 3 alerts — ordered doses between 12-15mg
+    CODEI30 (Codeine 30mg): 5 alerts â€” ordered doses between 300-480mg
+    MORPH10 (Morphine 10mg): 4 alerts â€” ordered doses between 250-500mg
+    WARF1 (Warfarin 1mg): 3 alerts â€” ordered doses between 12-15mg
 
   All 847 orders were also forwarded to EPMA Pharmacy Router as usual.
 ```
@@ -760,15 +760,15 @@ IRIS Copilot: Here's the status for Pharmacy Dose Check (last 24 hours):
 ### 8.2 User Requests a Modification
 
 ```
-User: Can you add a second email recipient — ICU charge nurse at
-      icunurse@example.nhs.uk — but only for Morphine and Warfarin alerts?
+User: Can you add a second email recipient â€” ICU charge nurse at
+      icunurse@example.nhs.uk â€” but only for Morphine and Warfarin alerts?
 
 IRIS Copilot: I'll modify the DoseCheckProcess to add conditional routing for
 Morphine (MORPH*) and Warfarin (WARF*) alerts to both the pharmacy team AND
 the ICU charge nurse.
 
 [Generates modified BPL with additional <if> block]
-[Shows diff in Code Review panel — only the changed section highlighted]
+[Shows diff in Code Review panel â€” only the changed section highlighted]
 
 User: Approve.
 
@@ -783,9 +783,9 @@ User: The ICU nurses are getting too many alerts. Roll back to the previous vers
 
 IRIS Copilot: Rolling back to V-2026-0217-001 (before ICU nurse routing)...
 
-  ✓ Restored DoseCheckProcess.cls to V-001
-  ✓ Recompiled — 0 errors
-  ✓ Production updated
+  âœ“ Restored DoseCheckProcess.cls to V-001
+  âœ“ Recompiled â€” 0 errors
+  âœ“ Production updated
 
   ICU nurse routing has been removed. Only pharmsafety@ receives alerts now.
   Version V-2026-0217-003 created (records the rollback action).
@@ -793,7 +793,7 @@ IRIS Copilot: Rolling back to V-2026-0217-001 (before ICU nurse routing)...
 
 ---
 
-## Phase 9: Summary — What Happened Without Writing Any COS
+## Phase 9: Summary â€” What Happened Without Writing Any COS
 
 | Step | Who Did It | Time |
 |------|-----------|------|
@@ -816,3 +816,4 @@ IRIS Copilot: Rolling back to V-2026-0217-001 (before ICU nurse routing)...
 ---
 
 *End of Demo Lifecycle Document. See TEST-CASES.md for the formal test specification.*
+
