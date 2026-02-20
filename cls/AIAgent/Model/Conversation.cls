@@ -71,21 +71,29 @@ ClassMethod List(page As %Integer = 1, pageSize As %Integer = 20, status As %Str
 {
     // Count total
     set countSql = "SELECT COUNT(*) FROM AIAgent_Model.Conversation"
-    if status '= "" { set countSql = countSql _ " WHERE Status = ?" }
+    if status '= "" { set countSql = countSql _ " WHERE ""Status"" = ?" }
     set stmt = ##class(%SQL.Statement).%New()
-    do stmt.%Prepare(countSql)
+    set sc = stmt.%Prepare(countSql)
+    if $$$ISERR(sc) {
+        do ##class(AIAgent.Util.Logger).Error("Conversation", "List count prepare failed", $system.Status.GetOneErrorText(sc))
+        return ##class(AIAgent.Util.JSON).PaginatedResponse(##class(%DynamicArray).%New(), 0, page, pageSize)
+    }
     set rs = $select(status'="":stmt.%Execute(status), 1:stmt.%Execute())
     do rs.%Next()
     set total = rs.%GetData(1)
 
-    // Fetch page
+    // Fetch page IDs first, then open objects to avoid SQL keyword/property name issues
     set offset = (page - 1) * pageSize
-    set dataSql = "SELECT ConversationId, Title, Language, Status, CreatedBy, CreatedAt, UpdatedAt, TargetNamespace FROM AIAgent_Model.Conversation"
-    if status '= "" { set dataSql = dataSql _ " WHERE Status = ?" }
+    set dataSql = "SELECT %ID FROM AIAgent_Model.Conversation"
+    if status '= "" { set dataSql = dataSql _ " WHERE ""Status"" = ?" }
     set dataSql = dataSql _ " ORDER BY UpdatedAt DESC"
 
     set stmt2 = ##class(%SQL.Statement).%New()
-    do stmt2.%Prepare(dataSql)
+    set sc = stmt2.%Prepare(dataSql)
+    if $$$ISERR(sc) {
+        do ##class(AIAgent.Util.Logger).Error("Conversation", "List data prepare failed", $system.Status.GetOneErrorText(sc))
+        return ##class(AIAgent.Util.JSON).PaginatedResponse(##class(%DynamicArray).%New(), total, page, pageSize)
+    }
     set rs2 = $select(status'="":stmt2.%Execute(status), 1:stmt2.%Execute())
 
     set arr = ##class(%DynamicArray).%New()
@@ -95,17 +103,12 @@ ClassMethod List(page As %Integer = 1, pageSize As %Integer = 20, status As %Str
         set skip = skip + 1
         continue:(skip <= offset)
         quit:(count >= pageSize)
-        set obj = ##class(%DynamicObject).%New()
-        set obj.conversationId = rs2.%GetData(1)
-        set obj.title = rs2.%GetData(2)
-        set obj.language = rs2.%GetData(3)
-        set obj.status = rs2.%GetData(4)
-        set obj.createdBy = rs2.%GetData(5)
-        set obj.createdAt = rs2.%GetData(6)
-        set obj.updatedAt = rs2.%GetData(7)
-        set obj.targetNamespace = rs2.%GetData(8)
-        do arr.%Push(obj)
-        set count = count + 1
+        set id = rs2.%GetData(1)
+        set conv = ##class(AIAgent.Model.Conversation).%OpenId(id)
+        if $isobject(conv) {
+            do arr.%Push(conv.ToJSON())
+            set count = count + 1
+        }
     }
 
     return ##class(AIAgent.Util.JSON).PaginatedResponse(arr, total, page, pageSize)
