@@ -650,7 +650,59 @@ export class Orchestrator {
   private parseDirectGenericAction(message: string): { action: ActionProposal; dryRun: boolean } | null {
     const text = message || '';
     const lower = text.toLowerCase();
-    const dryRun = /\bdry[- ]?run\b|\bpreview\b|\bplan only\b|\bdry run only\b/.test(lower);
+    const dryRun = /\bdry[- ]run(?:\s+only)?\b|\bplan only\b|\bpreview\b/.test(lower);
+
+    const lookupMatch = text.match(/\blookup table\s+([A-Za-z0-9_.-]+)/i);
+    if ((/\b(show|get|list)\b/.test(lower)) && lookupMatch && /\b(content|entries|values|table)\b/.test(lower)) {
+      const tableName = lookupMatch[1];
+      return {
+        dryRun: false,
+        action: {
+          id: this.actionId(),
+          type: 'lookup_read',
+          op: 'query',
+          target: `lookup/${tableName}`,
+          summary: `Read lookup table '${tableName}' entries.`,
+          requiresApproval: false,
+          status: 'executed',
+          payload: { args: {} },
+        },
+      };
+    }
+
+    const classMetaMatch = text.match(/\b(?:class\s+metadata\s+for|metadata\s+for\s+class|metadata\s+for|class)\s+([A-Za-z0-9_.%]+)/i);
+    if (/\bmetadata\b/.test(lower) && classMetaMatch) {
+      const className = classMetaMatch[1];
+      return {
+        dryRun: false,
+        action: {
+          id: this.actionId(),
+          type: 'class_meta_read',
+          op: 'query',
+          target: `classmeta/${className}`,
+          summary: `Read metadata for class '${className}'.`,
+          requiresApproval: false,
+          status: 'executed',
+          payload: { args: {} },
+        },
+      };
+    }
+
+    if (/\b(invoke policy|invocation policy)\b/.test(lower)) {
+      return {
+        dryRun: false,
+        action: {
+          id: this.actionId(),
+          type: 'invoke_policy_read',
+          op: 'discover',
+          target: 'invoke-policy',
+          summary: 'Read current generic class invocation policy.',
+          requiresApproval: false,
+          status: 'executed',
+          payload: { args: {} },
+        },
+      };
+    }
 
     if (/\blist classes\b|\bshow classes\b|\bclass list\b/.test(lower)) {
       const pattern = this.extractClassPattern(text);
@@ -721,7 +773,7 @@ export class Orchestrator {
   }
 
   private extractClassPattern(message: string): string {
-    const pkgMatch = message.match(/\b(?:in|under|from)\s+([A-Za-z0-9_.%*]+)\s*(?:packages?|package)?/i);
+    const pkgMatch = message.match(/\b(?:in|under|from)\s+(?:the\s+)?([A-Za-z0-9_.%*]+)\s*(?:packages?|package)?/i);
     if (!pkgMatch) return 'AIAgent.%';
     let raw = pkgMatch[1].trim();
     raw = raw.replace(/\*/g, '%');

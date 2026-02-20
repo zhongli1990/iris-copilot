@@ -1,0 +1,117 @@
+{
+  "version": "0.1.2",
+  "namespace": "DEMO2_AI2",
+  "runner": "openai-codex-sdk",
+  "cases": [
+    {
+      "id": "RW01",
+      "title": "Production topology full detail",
+      "query": "List all production hosts with full details.",
+      "expected": {
+        "actionTargetAny": ["production/topology"],
+        "requiresApproval": false,
+        "responseIncludesAny": ["Production hosts (", "Current production has"],
+        "responseNotIncludes": ["Prepare integration change plan"]
+      }
+    },
+    {
+      "id": "RW02",
+      "title": "Queue depth overview",
+      "query": "Show queue depth for all hosts.",
+      "expected": {
+        "actionTargetAny": ["production/queues"],
+        "requiresApproval": false,
+        "responseIncludesAny": ["Queue counts", "Current queue counts", "No queue rows were returned."],
+        "responseNotIncludes": ["Prepare integration change plan"]
+      }
+    },
+    {
+      "id": "RW03",
+      "title": "Recent production events",
+      "query": "Show recent production events.",
+      "expected": {
+        "actionTargetAny": ["production/events"],
+        "requiresApproval": false,
+        "responseIncludesAny": ["Recent events", "Recent production events"],
+        "responseNotIncludes": ["Prepare integration change plan"]
+      }
+    },
+    {
+      "id": "RW04",
+      "title": "Lookup table content",
+      "query": "Show lookup table ErrorCodes content.",
+      "expected": {
+        "actionTargetAny": ["lookup/ErrorCodes"],
+        "requiresApproval": false,
+        "responseIncludesAny": ["Lookup table ErrorCodes", "has no entries"],
+        "responseNotIncludes": ["Prepare integration change plan"]
+      }
+    },
+    {
+      "id": "RW05",
+      "title": "Class metadata query",
+      "query": "Show metadata for class AIAgent.API.Dispatcher.",
+      "expected": {
+        "actionTargetAny": ["classmeta/AIAgent.API.Dispatcher"],
+        "requiresApproval": false,
+        "responseIncludesAny": ["Class metadata:", "Methods:"],
+        "responseNotIncludes": ["Prepare integration change plan"]
+      }
+    },
+    {
+      "id": "RW06",
+      "title": "Invocation policy query",
+      "query": "Show invocation policy.",
+      "expected": {
+        "actionTargetAny": ["invoke-policy"],
+        "requiresApproval": false,
+        "responseIncludesAny": ["Invocation policy:", "Mode:"],
+        "responseNotIncludes": ["Prepare integration change plan"]
+      }
+    },
+    {
+      "id": "RW07",
+      "title": "Class catalog by package pattern",
+      "query": "List classes in the NHSTIE2.* packages.",
+      "expected": {
+        "actionTargetAny": ["dictionary/classes"],
+        "requiresApproval": false,
+        "responseIncludesAny": ["Classes (", "Dictionary class catalog read"],
+        "responseNotIncludes": ["Prepare integration change plan"]
+      }
+    },
+    {
+      "id": "RW08",
+      "title": "Dry-run add disabled host",
+      "query": "Create a plan to add a disabled test business host named AIAgent.DryRun.TestHost, dry-run only.",
+      "expected": {
+        "actionTargetAny": ["production/host/add"],
+        "requiresApproval": false,
+        "responseIncludesAny": ["Dry-run executed", "\"dry_run\""],
+        "responseNotIncludes": ["Prepare integration change plan"]
+      }
+    },
+    {
+      "id": "RW09",
+      "title": "Apply add host requires approval",
+      "query": "Add a disabled test business host named AIAgent.DryRun.TestHost.",
+      "expected": {
+        "actionTargetAny": ["production/host/add"],
+        "requiresApproval": true,
+        "responseIncludesAny": ["Execution plan prepared", "Human approval is required"],
+        "responseNotIncludes": []
+      }
+    },
+    {
+      "id": "RW10",
+      "title": "Dry-run remove host",
+      "query": "Remove business host named AIAgent.DryRun.TestHost, dry-run only.",
+      "expected": {
+        "actionTargetAny": ["production/host/remove"],
+        "requiresApproval": false,
+        "responseIncludesAny": ["Dry-run executed", "\"dry_run\""],
+        "responseNotIncludes": ["Prepare integration change plan"]
+      }
+    }
+  ]
+}
