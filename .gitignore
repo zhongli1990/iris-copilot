@@ -37,3 +37,4 @@ deploy/AIAgent-export*.xml
 # Local/private docs (do not publish)
 docs/*[Dd][Ee][Ss][Ii][Gg][Nn]*.md
 docs/*[Gg][Ee][Nn][Ee][Rr][Ii][Cc]*.md
+docs/IMPLEMENTATION-PLAN.md
