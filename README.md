@@ -110,10 +110,8 @@ Health checks:
 
 ## License
 
-This project is licensed under the **Apache License 2.0**.
-See `LICENSE` for the full Apache-2.0 license text.
-
-Enterprise/commercial terms are available separately in `LICENSE-ENTERPRISE.md`.
+Copyright (c) Lightweight Integration Limited. See [`LICENSE`](LICENSE) for terms.
+Enterprise licensing: [Zhong@li-ai.co.uk](mailto:Zhong@li-ai.co.uk)
 
 
 
