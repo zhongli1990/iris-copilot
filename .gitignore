@@ -41,3 +41,6 @@ deploy/.export-version
 docs/*[Dd][Ee][Ss][Ii][Gg][Nn]*.md
 docs/*[Gg][Ee][Nn][Ee][Rr][Ii][Cc]*.md
 docs/IMPLEMENTATION-PLAN.md
+
+# History-rewrite scratch (filter-repo rules + handover doc, both local-only)
+.history-rewrite/
