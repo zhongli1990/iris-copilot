@@ -54,16 +54,34 @@ do $system.OBJ.Load("<path>\\deploy\\AIAgent-export-v34.xml", "ck")
 
 ### 2. Create IRIS Web Application
 
-In IRIS Management Portal, create/update two web applications:
+The `/ai` REST web application is created automatically by
+`do ##class(AIAgent.Install.Installer).Run()` after import. It is dispatched
+via `AIAgent.API.Dispatcher` and serves all REST endpoints.
 
-1. `/<namespace>/` for CSP pages (for `AIAgent.UI.Chat.cls`)
-2. `/ai` for REST APIs (dispatch class `AIAgent.API.Dispatcher`)
+The Chat UI (`AIAgent.UI.Chat.cls`) is a CSP page served from the
+**namespace's own CSP application**, which IRIS creates automatically per
+namespace. The exact path differs between IRIS HealthShare and vanilla IRIS:
 
-Recommended settings:
+| IRIS edition       | Chat UI URL (substitute `<ns>` lowercased) |
+|--------------------|---------------------------------------------|
+| **HealthShare**    | `http://<iris-host>:52773/csp/healthshare/<ns>/AIAgent.UI.Chat.cls` |
+| **Vanilla IRIS**   | `http://<iris-host>:52773/csp/<ns>/AIAgent.UI.Chat.cls` |
+
+In Management Portal -> System Administration -> Security -> Applications -> Web Applications,
+confirm both apps are present:
+
+1. `/ai` (REST, dispatch class `AIAgent.API.Dispatcher`) - created by Installer
+2. `/csp/healthshare/<ns>/` or `/csp/<ns>/` (CSP, namespace default) - auto-created by IRIS
+
+Recommended settings on `/ai`:
 - Namespace: your target namespace (for example `DEMO2_AI2`)
-- Dispatch Class (for `/ai`): `AIAgent.API.Dispatcher`
+- Dispatch Class: `AIAgent.API.Dispatcher`
 - Enable Authentication: Password or delegated SSO per site policy
 - Allowed Authentication Methods: align with your enterprise security model
+
+**Gotcha:** the namespace fragment in the CSP URL must be **lowercase**,
+even if your namespace name is uppercase (e.g. `DEMO2_AI2` -> `demo2_ai2`
+in the URL).
 
 ### 3. Start bridge
 
@@ -80,9 +98,17 @@ Configure keys and runner settings in:
 
 ### 4. Open Chat UI
 
+Substitute your IRIS edition and lowercased namespace:
+
 ```text
-http://<iris-host>:52773/csp/<namespace>/AIAgent.UI.Chat.cls
+# IRIS HealthShare:
+http://<iris-host>:52773/csp/healthshare/<ns>/AIAgent.UI.Chat.cls
+
+# Vanilla IRIS:
+http://<iris-host>:52773/csp/<ns>/AIAgent.UI.Chat.cls
 ```
+
+(The `/ai` web app is REST-only; it does not serve the CSP Chat page.)
 
 Health checks:
 - IRIS API: `http://<iris-host>:52773/ai/health`

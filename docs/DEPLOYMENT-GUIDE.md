@@ -279,7 +279,8 @@ do ##class(AIAgent.Install.Installer).Run()
 [AIAgent.Install] ================================================
 [AIAgent.Install] Installation complete!
 [AIAgent.Install]
-[AIAgent.Install] Chat UI: http://localhost:52773/ai/AIAgent.UI.Chat.cls
+[AIAgent.Install] Chat UI: http://localhost:52773/csp/healthshare/<ns>/AIAgent.UI.Chat.cls  (HealthShare)
+[AIAgent.Install]          http://localhost:52773/csp/<ns>/AIAgent.UI.Chat.cls             (vanilla IRIS)
 [AIAgent.Install] REST API: http://localhost:52773/ai/health
 [AIAgent.Install]
 [AIAgent.Install] Next: Configure API keys with:
@@ -460,11 +461,18 @@ Expected response:
 
 ### Check Chat UI
 
-Open in browser:
+Open in browser (substitute lowercased namespace, e.g. `demo2_ai2` for `DEMO2_AI2`):
 
 ```
-http://your-iris-server:52773/ai/AIAgent.UI.Chat.cls
+# IRIS HealthShare:
+http://your-iris-server:52773/csp/healthshare/<ns>/AIAgent.UI.Chat.cls
+
+# Vanilla IRIS:
+http://your-iris-server:52773/csp/<ns>/AIAgent.UI.Chat.cls
 ```
+
+The Chat UI is served from the namespace's auto-created CSP application,
+not from the `/ai` REST application.
 
 You should see the dark-themed chat interface. Create a new conversation and send a test message like "Hello, are you working?" to verify end-to-end connectivity.
 

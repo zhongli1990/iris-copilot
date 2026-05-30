@@ -71,8 +71,17 @@ You deploy and configure the platform itself, manage API keys, and handle the IR
 Open your browser and navigate to:
 
 ```
-http://<your-iris-server>:52773/ai/AIAgent.UI.Chat.cls
+# IRIS HealthShare:
+http://<your-iris-server>:52773/csp/healthshare/<namespace-lowercase>/AIAgent.UI.Chat.cls
+
+# Vanilla IRIS:
+http://<your-iris-server>:52773/csp/<namespace-lowercase>/AIAgent.UI.Chat.cls
 ```
+
+Substitute `<namespace-lowercase>` with your IRIS namespace name in lowercase
+(e.g. `demo2_ai2` for namespace `DEMO2_AI2`). The Chat UI is served from the
+namespace's default CSP application (which IRIS auto-creates per namespace),
+not from the `/ai` REST web application.
 
 You'll need an IRIS account with `%Development` resource access. Log in with your standard IRIS credentials.
 
@@ -415,8 +424,9 @@ For the full generic gateway validation payloads, see [E2E-GENERIC-VALIDATION.md
 
 ### Pre-check (5 minutes)
 
-1. Open Chat UI in your target namespace:
-   `http://<iris-host>:52773/csp/<namespace>/AIAgent.UI.Chat.cls`
+1. Open Chat UI in your target namespace (substitute lowercase namespace):
+   - HealthShare: `http://<iris-host>:52773/csp/healthshare/<ns>/AIAgent.UI.Chat.cls`
+   - Vanilla IRIS: `http://<iris-host>:52773/csp/<ns>/AIAgent.UI.Chat.cls`
 2. Verify IRIS health:
    `http://<iris-host>:52773/ai/health`
 3. Verify bridge health:
