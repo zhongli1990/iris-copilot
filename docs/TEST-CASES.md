@@ -102,8 +102,8 @@
 |-------|-------|
 | **ID** | TC-ENGINE-003 |
 | **Steps** | 1. Call `ProductionManager.GetTopology()` |
-| **Expected** | Returns JSON with all 150+ hosts from Trust.Productions.TEST |
-| **Pass Criteria** | JSON contains known hosts: "From Cerner ADT", "Cerner Distributor", "EPMA Pharmacy Router" |
+| **Expected** | Returns JSON listing all production hosts from the configured production (e.g. `Trust.Productions.TEST`) |
+| **Pass Criteria** | JSON contains the expected host names from the test fixture's published production, with at least the inbound EPR services, message distributor, and at least one outbound operation |
 
 ### TC-ENGINE-004: ProductionManager â€” Add and Remove Business Host
 

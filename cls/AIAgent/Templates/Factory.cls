@@ -131,7 +131,7 @@ ClassMethod Generate(componentType As %String, spec As %DynamicObject) As %Strin
         if rules '= "" {
             quit ##class(AIAgent.Templates.RoutingRule).Generate(className, description, rules)
         }
-        // Try Trust standard pattern
+        // Fall back to standard message-type-based routing pattern
         quit ##class(AIAgent.Templates.RoutingRule).GenerateStandard(
             className, description,
             spec.%Get("adtTarget", ""),

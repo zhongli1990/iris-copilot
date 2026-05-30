@@ -1,6 +1,93 @@
 ﻿# Release Notes
 
-## v0.1.5 - 2026-02-20
+## v0.2.0 - 2026-05-30
+
+### Summary
+Public-distribution sanitisation release. Removes site-specific names, hostnames,
+and an embedded reference production catalogue from the public source tree, and
+re-establishes the deployment package on a clean baseline (`v34`). No runtime
+behaviour changes.
+
+### Changes
+- Source code:
+  - `bridge/src/server.ts`: removed hard-coded site CORS regex; added
+    `CORS_EXTRA_ORIGINS` env var so deploying sites configure their own
+    trust domain in `.env` rather than in source.
+  - `bridge/src/runners/claude-agent-sdk/index.ts`: removed trust-specific
+    system prompt content (host counts, system catalogue, trust name).
+    Replaced with guidance to read the live production via discovery API.
+  - `bridge/src/runners/runner-interface.ts`: generic example in JSDoc.
+  - `bridge/src/tools/e2e-sample-queries.ts`: example query uses
+    `AIAgent.*` namespace pattern.
+- ObjectScript classes:
+  - `AIAgent.Templates.RoutingRule.GenerateStandard` renamed to
+    `GenerateStandard`. Caller in `AIAgent.Templates.Factory` updated.
+  - `AIAgent.Engine.CodeManager`: example pattern doc-comment uses generic
+    `Trust.Interfaces.Cerner.%` placeholder.
+  - `AIAgent.Test.E2E`: example chat query uses `AIAgent.*` pattern.
+- Knowledge:
+  - `knowledge/tie-conventions.md` renamed to `knowledge/tie-conventions.md`
+    and rewritten as a generic placeholder. Deploying sites override with
+    their own private copy at the same path.
+  - `knowledge/hl7-schemas.md`: generic example values (no trust facility code).
+- Documentation:
+  - `docs/DEMO-LIFECYCLE.md`, `docs/USER-GUIDE.md`, `docs/TEST-CASES.md`,
+    `README.md`: replaced site-specific class prefixes, system names, and
+    email addresses with generic placeholders (`Trust.*`, `EPMA`,
+    `MaternityNetwork`, `example.nhs.uk`).
+  - `docs/REALWORLD-LIFECYCLE-QUERIES.md` and `docs/REALWORLD-TEST-RESULTS.md`
+    rewritten as generic operator-facing docs; site-specific harness output
+    must be regenerated locally and is not committed.
+- Reference / test artefacts:
+  - `reference/VersionControl.UpdateBranch.cls` reduced to an abstract stub.
+    The original embedded a non-public site's package list.
+  - `tests/realworld-e2e-{last,judge}-report.json` reduced to schema-valid
+    placeholders. The harness regenerates these on each `npm run e2e:realworld`
+    run; regenerated content is local to the deployment site and must not
+    be committed to a public repository.
+- Deployment package:
+  - Legacy export snapshots `v24`-`v33` removed. They embedded the
+    pre-sanitisation symbol set (`Trust.*`, `GenerateStandard`).
+  - New clean export generated as `deploy/AIAgent-export-v34.xml` from the
+    sanitised `.cls` source.
+  - `.gitignore` updated to commit only the current release snapshot.
+  - `deploy/.export-version` untracked (now per-developer local state).
+
+### Backwards Compatibility
+- IRIS class API surface: one method renamed
+  (`GenerateStandard` -> `GenerateStandard` on `AIAgent.Templates.RoutingRule`).
+  Internal-only call site updated. No external API consumers are documented.
+- Bridge HTTP API surface: unchanged.
+- IRIS REST dispatcher: unchanged.
+- CSP UI: unchanged.
+- Deployment process: import `deploy/AIAgent-export-v34.xml` instead of `v33.xml`.
+
+### Validation (Quality Gates)
+- QG1 Bridge TypeScript: `npm run typecheck` and `npm run build` both pass.
+- QG2 Leakage grep: zero matches across all tracked files for any of:
+  `Trust`, `TRUST`, `\bTrust\b`, `GenerateTrust`, `example`,
+  `EXAMPLE`, `EXAMPLE2`, `RegionalCareRecord`, `MaternityNetwork`, `WardManagement`, `LegacyADT`, `LegacyPathology`, `InfectionControlNet`,
+  `EndoscopyReporting`, `EPMA`, `EDSystem`, `CardiologyReporting`, `PACS`, `example`,
+  `TIE`, `Example`, `Trust.AIGenerated`, `AIAgent`,
+  `example trust`, `teaching hospital`.
+- QG3 Internal references:
+  - `GenerateStandard` rename consistent across .cls source and v34 XML.
+  - Factory.cls call site passes the 6 expected parameters.
+  - v34 XML parses (25 classes, generator=IRIS, exportversion=34).
+  - Cross-doc links resolve (REALWORLD docs exist as stubs).
+  - Compiled `bridge/dist` JS contains zero leakage tokens after `npm run build`.
+
+### Known Follow-ups (out of scope for this release)
+- **Git history**: prior commits on `main` still contain the un-sanitised
+  symbols. To fully purge from the public repo, choose one of:
+  (a) `git filter-repo` + force-push with team coordination; or
+  (b) re-publish from a sanitised single-commit copy and delete the old repo.
+  This release sanitises `HEAD`; the history rewrite is a separate operation.
+- Live realworld harness output regenerated post-deploy will need
+  trust-specific anonymisation logic if/when sites want to publish their
+  own evaluation reports.
+
+
 
 ### Summary
 Quality hardening and reporting release: production host mutation reliability fixes, orchestrator action-quality improvements, new packaged XML export (`v31`), and full human-readable real-world query/outcome reporting.
@@ -54,9 +141,6 @@ Documentation, governance, and regression-evaluation release: expanded real-worl
 - Licensing/docs policy:
   - README license section updated to standard open-source license statement.
   - Design/generic markdown docs moved to local-only policy and removed from published git history.
-- Neutral documentation wording:
-  - Removed site-specific `Trust` naming from published markdown docs.
-
 ### Validation
 - Executed `npm.cmd run e2e:realworld` against live bridge/IRIS.
 - Latest measured outcome:

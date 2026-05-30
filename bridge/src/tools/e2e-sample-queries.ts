@@ -167,9 +167,9 @@ async function main() {
     },
     {
       id: 'T05',
-      name: 'Chat: list classes in Trust.*',
+      name: 'Chat: list classes in AIAgent.*',
       run: async () => {
-        const rsp = await callChat('list classes in the Trust.* packages');
+        const rsp = await callChat('list classes in the AIAgent.* packages');
         const text = String(rsp.response || '');
         const actions = asArray((rsp as Json).actions);
         const first = (actions[0] || {}) as Json;

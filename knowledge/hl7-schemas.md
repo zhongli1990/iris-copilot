@@ -1,6 +1,6 @@
 ﻿# HL7 v2 Message Schemas Reference for AI Agents
 
-## 1. Common Message Types in TIE
+## 1. Common Message Types in an NHS TIE
 
 ### ADT (Admit/Discharge/Transfer)
 | Event | Name | Trigger |
@@ -107,8 +107,8 @@ TXA  Transcription Document Header
 ### MSH (Message Header)
 | Field | ID | Description |
 |-------|-----|-------------|
-| Sending Application | MSH:3 | e.g., "CERNER", "IPM" |
-| Sending Facility | MSH:4 | e.g., "TRUST" |
+| Sending Application | MSH:3 | e.g., "EPR", "PAS" |
+| Sending Facility | MSH:4 | e.g., trust/site code |
 | Receiving Application | MSH:5 | |
 | Message DateTime | MSH:7 | TS format |
 | Message Type | MSH:9.1 | e.g., "ADT" |
@@ -119,7 +119,7 @@ TXA  Transcription Document Header
 ### PID (Patient Identification)
 | Field | ID | Description |
 |-------|-----|-------------|
-| Patient ID (MRN) | PID:3(1).1 | TRUST MRN in Site |
+| Patient ID (MRN) | PID:3(1).1 | Local MRN (site-specific) |
 | Patient Name - Family | PID:5.1 | Last name |
 | Patient Name - Given | PID:5.2 | First name |
 | Date of Birth | PID:7 | TS format |

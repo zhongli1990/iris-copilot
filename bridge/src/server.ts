@@ -63,12 +63,24 @@ if (registry.getAll().length === 0) {
 const app = express();
 
 // Middleware
+// CORS allowlist:
+//  - localhost (dev)
+//  - any *.nhs.uk subdomain (deployment-site agnostic)
+// Deploying sites should add their own trust-specific domain via the
+// CORS_EXTRA_ORIGINS env var (comma-separated list of regex patterns)
+// rather than baking site-specific hostnames into source.
+const extraOrigins = (process.env.CORS_EXTRA_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0)
+  .map((pattern) => new RegExp(pattern));
+
 app.use(cors({
   origin: [
     'http://localhost',
     /^http:\/\/localhost:\d+$/,
     /\.nhs\.uk$/,
-    /\.example\./,
+    ...extraOrigins,
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

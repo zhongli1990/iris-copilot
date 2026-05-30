@@ -87,7 +87,7 @@ ClassMethod Generate(className As %String, description As %String, rules As %Lis
     quit source
 }
 
-/// Generate a routing rule with common Trust TIE patterns.
+/// Generate a routing rule with common TIE message-type patterns.
 /// Pre-fills rules for ADT, ORM, ORU, RDE message type routing.
 ClassMethod GenerateStandard(className As %String, description As %String, adtTarget As %String = "", ormTarget As %String = "", oruTarget As %String = "", rdeTarget As %String = "") As %String
 {

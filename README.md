@@ -49,7 +49,7 @@ Typical terminal flow:
 
 ```objectscript
 zn "<YOUR_NAMESPACE>"
-do $system.OBJ.Load("<path>\\deploy\\AIAgent-export-v33.xml", "ck")
+do $system.OBJ.Load("<path>\\deploy\\AIAgent-export-v34.xml", "ck")
 ```
 
 ### 2. Create IRIS Web Application
@@ -105,8 +105,11 @@ Health checks:
 
 ## Repository Notes
 
-- This repo is standalone under `Site/AIAgent`
 - Secrets are excluded via `.gitignore` (`.env`, build artifacts, generated export XML)
+- The `knowledge/tie-conventions.md` document is a generic placeholder. Deploying
+  sites should replace it with a trust-specific copy (same path) reflecting their
+  own package prefix, integration estate, and coding standards. Keep site-specific
+  copies in a private repo, not in this public one.
 
 ## License
 

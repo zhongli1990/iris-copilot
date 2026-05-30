@@ -39,7 +39,7 @@ ClassMethod Run(bridgeBase As %String = "http://localhost:3100", irisBase As %St
     set body3.namespace = ns
     set body3.conversationId = "iris-e2e-"_$piece($horolog,",",2)
     set body3.preferredRunner = "openai-codex-sdk"
-    set body3.message = "list classes in the Trust.* packages"
+    set body3.message = "list classes in the AIAgent.* packages"
     do ..RunCase("chat-class-query", bridgeBase_"/api/chat", "POST", body3.%ToJSON(), "runner", "", .sc)
 
     set body4 = ##class(%DynamicObject).%New()

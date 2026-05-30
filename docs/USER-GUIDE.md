@@ -119,7 +119,7 @@ The AI will ask targeted questions to fill in technical details:
 - Which existing system routes should be preserved?
 - Where should log files be saved?
 
-**You can answer in plain English.** If you're unsure about a technical detail, say so â€” the AI will suggest sensible defaults based on the existing TIE configuration.
+**You can answer in plain English.** If you're unsure about a technical detail, say so â€” the AI will suggest sensible defaults based on the existing trust TIE configuration.
 
 ### Step 3: Review the Design
 
