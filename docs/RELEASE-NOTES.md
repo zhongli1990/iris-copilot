@@ -3,89 +3,99 @@
 ## v0.2.0 - 2026-05-30
 
 ### Summary
-Public-distribution sanitisation release. Removes site-specific names, hostnames,
-and an embedded reference production catalogue from the public source tree, and
-re-establishes the deployment package on a clean baseline (`v34`). No runtime
-behaviour changes.
+Public-distribution release. Generalises the codebase from a single-tenant
+NHS Trust origin to a deployment-site-agnostic template, and re-establishes
+the deployment package on a clean baseline (`v34`). No runtime behaviour
+changes.
 
 ### Changes
 - Source code:
-  - `bridge/src/server.ts`: removed hard-coded site CORS regex; added
-    `CORS_EXTRA_ORIGINS` env var so deploying sites configure their own
+  - `bridge/src/server.ts`: removed a hard-coded site CORS regex; added
+    a `CORS_EXTRA_ORIGINS` env var so deploying sites configure their own
     trust domain in `.env` rather than in source.
-  - `bridge/src/runners/claude-agent-sdk/index.ts`: removed trust-specific
-    system prompt content (host counts, system catalogue, trust name).
-    Replaced with guidance to read the live production via discovery API.
-  - `bridge/src/runners/runner-interface.ts`: generic example in JSDoc.
-  - `bridge/src/tools/e2e-sample-queries.ts`: example query uses
-    `AIAgent.*` namespace pattern.
+  - `bridge/src/runners/claude-agent-sdk/index.ts`: system prompt now
+    instructs the model to discover trust-specific context (host counts,
+    system catalogue, trust name, package prefix) from the live IRIS
+    production via the discovery API at runtime, rather than embedding
+    any fixed catalogue.
+  - `bridge/src/runners/runner-interface.ts`: JSDoc example uses a
+    generic placeholder class name.
+  - `bridge/src/tools/e2e-sample-queries.ts`: example class-catalogue
+    query uses the `AIAgent.*` namespace pattern.
 - ObjectScript classes:
-  - `AIAgent.Templates.RoutingRule.GenerateStandard` renamed to
-    `GenerateStandard`. Caller in `AIAgent.Templates.Factory` updated.
-  - `AIAgent.Engine.CodeManager`: example pattern doc-comment uses generic
-    `Trust.Interfaces.Cerner.%` placeholder.
-  - `AIAgent.Test.E2E`: example chat query uses `AIAgent.*` pattern.
+  - `AIAgent.Templates.RoutingRule`: a routing-rule helper method was
+    renamed from a site-specific name to `GenerateStandard`. The single
+    internal caller in `AIAgent.Templates.Factory` was updated in the
+    same change.
+  - `AIAgent.Engine.CodeManager`: example pattern doc-comment now uses
+    a generic `Trust.Interfaces.<System>` placeholder.
+  - `AIAgent.Test.E2E`: example chat query uses the `AIAgent.*` pattern.
 - Knowledge:
-  - `knowledge/tie-conventions.md` renamed to `knowledge/tie-conventions.md`
-    and rewritten as a generic placeholder. Deploying sites override with
-    their own private copy at the same path.
-  - `knowledge/hl7-schemas.md`: generic example values (no trust facility code).
+  - The TIE-conventions knowledge file under `knowledge/` was rewritten
+    as a generic, deployment-site-agnostic template. Deploying sites
+    are expected to override it with their own private copy at the
+    same path (`knowledge/tie-conventions.md`).
+  - `knowledge/hl7-schemas.md`: generic example values; no trust
+    facility code or local identifier examples.
 - Documentation:
   - `docs/DEMO-LIFECYCLE.md`, `docs/USER-GUIDE.md`, `docs/TEST-CASES.md`,
-    `README.md`: replaced site-specific class prefixes, system names, and
-    email addresses with generic placeholders (`Trust.*`, `EPMA`,
-    `MaternityNetwork`, `example.nhs.uk`).
-  - `docs/REALWORLD-LIFECYCLE-QUERIES.md` and `docs/REALWORLD-TEST-RESULTS.md`
-    rewritten as generic operator-facing docs; site-specific harness output
-    must be regenerated locally and is not committed.
+    `README.md`: site-specific class prefixes, internal system names,
+    and email addresses replaced with generic placeholders
+    (`Trust.*`, `EPMA`, `MaternityNetwork`, `example.nhs.uk`).
+  - `docs/REALWORLD-LIFECYCLE-QUERIES.md` and
+    `docs/REALWORLD-TEST-RESULTS.md` rewritten as generic
+    operator-facing docs; live harness output must be regenerated
+    locally and is not committed.
 - Reference / test artefacts:
-  - `reference/VersionControl.UpdateBranch.cls` reduced to an abstract stub.
-    The original embedded a non-public site's package list.
-  - `tests/realworld-e2e-{last,judge}-report.json` reduced to schema-valid
-    placeholders. The harness regenerates these on each `npm run e2e:realworld`
-    run; regenerated content is local to the deployment site and must not
-    be committed to a public repository.
+  - `reference/VersionControl.UpdateBranch.cls` reduced to an abstract
+    stub. The original embedded a non-public site's package list.
+  - `tests/realworld-e2e-{last,judge}-report.json` reduced to
+    schema-valid placeholders. The harness regenerates these on each
+    `npm run e2e:realworld` run; regenerated content is local to the
+    deployment site and must not be committed to a public repository.
 - Deployment package:
   - Legacy export snapshots `v24`-`v33` removed. They embedded the
-    pre-sanitisation symbol set (`Trust.*`, `GenerateStandard`).
-  - New clean export generated as `deploy/AIAgent-export-v34.xml` from the
-    sanitised `.cls` source.
+    pre-generalisation symbol set.
+  - New clean export generated as `deploy/AIAgent-export-v34.xml` from
+    the sanitised `.cls` source.
   - `.gitignore` updated to commit only the current release snapshot.
   - `deploy/.export-version` untracked (now per-developer local state).
 
 ### Backwards Compatibility
-- IRIS class API surface: one method renamed
-  (`GenerateStandard` -> `GenerateStandard` on `AIAgent.Templates.RoutingRule`).
-  Internal-only call site updated. No external API consumers are documented.
+- IRIS class API surface: one internal helper method renamed on
+  `AIAgent.Templates.RoutingRule` (caller updated). No external API
+  consumers are documented.
 - Bridge HTTP API surface: unchanged.
 - IRIS REST dispatcher: unchanged.
 - CSP UI: unchanged.
-- Deployment process: import `deploy/AIAgent-export-v34.xml` instead of `v33.xml`.
+- Deployment process: import `deploy/AIAgent-export-v34.xml` instead of
+  `v33.xml`.
 
 ### Validation (Quality Gates)
-- QG1 Bridge TypeScript: `npm run typecheck` and `npm run build` both pass.
-- QG2 Leakage grep: zero matches across all tracked files for any of:
-  `Trust`, `TRUST`, `\bTrust\b`, `GenerateTrust`, `example`,
-  `EXAMPLE`, `EXAMPLE2`, `RegionalCareRecord`, `MaternityNetwork`, `WardManagement`, `LegacyADT`, `LegacyPathology`, `InfectionControlNet`,
-  `EndoscopyReporting`, `EPMA`, `EDSystem`, `CardiologyReporting`, `PACS`, `example`,
-  `TIE`, `Example`, `Trust.AIGenerated`, `AIAgent`,
-  `example trust`, `teaching hospital`.
+- QG1 Bridge TypeScript: `npm run typecheck` and `npm run build` both
+  pass.
+- QG2 Leakage grep: a curated list of legacy site-specific tokens was
+  scanned across the tracked tree; zero matches. The token list is
+  maintained out-of-tree alongside the operator-side history-rewrite
+  rules.
 - QG3 Internal references:
-  - `GenerateStandard` rename consistent across .cls source and v34 XML.
-  - Factory.cls call site passes the 6 expected parameters.
+  - Renamed helper consistent across `.cls` source and v34 XML.
+  - The caller's argument count matches the new signature.
   - v34 XML parses (25 classes, generator=IRIS, exportversion=34).
-  - Cross-doc links resolve (REALWORLD docs exist as stubs).
-  - Compiled `bridge/dist` JS contains zero leakage tokens after `npm run build`.
+  - Cross-doc links resolve.
+  - Compiled `bridge/dist` JS contains zero leakage tokens after
+    `npm run build`.
 
 ### Known Follow-ups (out of scope for this release)
-- **Git history**: prior commits on `main` still contain the un-sanitised
-  symbols. To fully purge from the public repo, choose one of:
-  (a) `git filter-repo` + force-push with team coordination; or
-  (b) re-publish from a sanitised single-commit copy and delete the old repo.
-  This release sanitises `HEAD`; the history rewrite is a separate operation.
+- **Git history**: prior commits on `main` retain the pre-generalisation
+  symbols. Operators wanting a fully purged public repo can run a
+  history rewrite (e.g. via `git filter-repo` with the replacement
+  rules maintained in a private workspace) followed by a coordinated
+  force-push. This release sanitises `HEAD`; the history rewrite is a
+  separate operation tracked out-of-tree.
 - Live realworld harness output regenerated post-deploy will need
-  trust-specific anonymisation logic if/when sites want to publish their
-  own evaluation reports.
+  site-specific anonymisation logic if/when sites want to publish
+  their own evaluation reports.
 
 
 
